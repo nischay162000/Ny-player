@@ -26,7 +26,6 @@ jobs:
       with:
         distribution: 'zulu'
         java-version: '17'
-        cache: gradle
         
     # Step 3: Create Android project structure
     - name: Create Android Project Structure
