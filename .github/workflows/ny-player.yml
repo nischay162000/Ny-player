@@ -231,7 +231,7 @@ jobs:
         </resources>
         EOF
         
-    - name: 📄 Create AndroidManifest.xml (FIXED: Using valid theme)
+    - name: 📄 Create AndroidManifest.xml 
       run: |
         cat > app/src/main/AndroidManifest.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
