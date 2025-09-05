@@ -23,6 +23,7 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
+        # Remove cache to avoid error since we're creating gradle files dynamically
         
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
@@ -38,12 +39,16 @@ jobs:
         
     - name: Generate project structure
       run: |
-        mkdir -p app/src/main/java/com/nyplayer/{ui,data,utils}
-        mkdir -p app/src/main/res/{layout,values,mipmap-anydpi-v26,drawable,xml,menu,color}
+        mkdir -p app/src/main/java/com/nyplayer/{ui,data,utils,models,adapters,fragments}
+        mkdir -p app/src/main/res/{layout,values,mipmap-anydpi-v26,drawable,xml,menu,color,anim}
         mkdir -p gradle/wrapper
         
-    - name: Create gradle wrapper
+    - name: Create gradle wrapper files
       run: |
+        # Download gradle wrapper jar
+        curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.4.0/gradle/wrapper/gradle-wrapper.jar
+        
+        # Create gradle wrapper properties
         cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
         distributionBase=GRADLE_USER_HOME
         distributionPath=wrapper/dists
@@ -53,6 +58,107 @@ jobs:
         zipStoreBase=GRADLE_USER_HOME
         zipStorePath=wrapper/dists
         EOF
+        
+        # Create gradlew script
+        cat > gradlew << 'EOF'
+        #!/usr/bin/env sh
+        ##############################################################################
+        ##
+        ##  Gradle start up script for UN*X
+        ##
+        ##############################################################################
+        
+        PRG="$0"
+        while [ -h "$PRG" ] ; do
+            ls=`ls -ld "$PRG"`
+            link=`expr "$ls" : '.*-> \(.*\)$'`
+            if expr "$link" : '/.*' > /dev/null; then
+                PRG="$link"
+            else
+                PRG=`dirname "$PRG"`"/$link"
+            fi
+        done
+        SAVED="`pwd`"
+        cd "`dirname \"$PRG\"`/" >/dev/null
+        APP_HOME="`pwd -P`"
+        cd "$SAVED" >/dev/null
+        
+        APP_NAME="Gradle"
+        APP_BASE_NAME=`basename "$0"`
+        DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+        MAX_FD="maximum"
+        
+        warn () {
+            echo "$*"
+        }
+        
+        die () {
+            echo
+            echo "$*"
+            echo
+            exit 1
+        }
+        
+        cygwin=false
+        msys=false
+        darwin=false
+        nonstop=false
+        case "`uname`" in
+          CYGWIN* )
+            cygwin=true
+            ;;
+          Darwin* )
+            darwin=true
+            ;;
+          MINGW* )
+            msys=true
+            ;;
+          NONSTOP* )
+            nonstop=true
+            ;;
+        esac
+        
+        CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+        
+        if [ -n "$JAVA_HOME" ] ; then
+            if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+                JAVACMD="$JAVA_HOME/jre/sh/java"
+            else
+                JAVACMD="$JAVA_HOME/bin/java"
+            fi
+            if [ ! -x "$JAVACMD" ] ; then
+                die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME"
+            fi
+        else
+            JAVACMD="java"
+            which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set"
+        fi
+        
+        if [ "$cygwin" = "false" -a "$darwin" = "false" -a "$nonstop" = "false" ] ; then
+            MAX_FD_LIMIT=`ulimit -H -n`
+            if [ $? -eq 0 ] ; then
+                if [ "$MAX_FD" = "maximum" -o "$MAX_FD" = "max" ] ; then
+                    MAX_FD="$MAX_FD_LIMIT"
+                fi
+                ulimit -n $MAX_FD
+            fi
+        fi
+        
+        if [ "$darwin" = "true" ]; then
+            GRADLE_OPTS="$GRADLE_OPTS \"-Xdock:name=$APP_NAME\" \"-Xdock:icon=$APP_HOME/media/gradle.icns\""
+        fi
+        
+        if [ "$cygwin" = "true" -o "$msys" = "true" ] ; then
+            APP_HOME=`cygpath --path --mixed "$APP_HOME"`
+            CLASSPATH=`cygpath --path --mixed "$CLASSPATH"`
+            JAVACMD=`cygpath --unix "$JAVACMD"`
+        fi
+        
+        eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dprop=value\"" -classpath "\"$CLASSPATH\"" org.gradle.wrapper.GradleWrapperMain "$@"
+        exec "$JAVACMD" "$@"
+        EOF
+        
+        chmod +x gradlew
         
     - name: Create settings.gradle
       run: |
@@ -69,6 +175,7 @@ jobs:
             repositories {
                 google()
                 mavenCentral()
+                maven { url 'https://jitpack.io' }
             }
         }
         rootProject.name = "NY Player"
@@ -82,6 +189,10 @@ jobs:
             id 'com.android.application' version '8.2.0' apply false
             id 'org.jetbrains.kotlin.android' version '1.9.10' apply false
         }
+
+        task clean(type: Delete) {
+            delete rootProject.buildDir
+        }
         EOF
         
     - name: Create gradle.properties
@@ -92,6 +203,8 @@ jobs:
         android.enableJetifier=true
         kotlin.code.style=official
         android.nonTransitiveRClass=true
+        android.defaults.buildfeatures.buildconfig=true
+        android.nonFinalResIds=false
         EOF
         
     - name: Create app build.gradle
@@ -112,14 +225,26 @@ jobs:
                 minSdk 21
                 targetSdk 34
                 versionCode 1
-                versionName "1.0"
+                versionName "1.0.0"
                 
                 testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+                vectorDrawables {
+                    useSupportLibrary true
+                }
+                multiDexEnabled true
             }
 
             buildTypes {
+                debug {
+                    debuggable true
+                    minifyEnabled false
+                    proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+                    applicationIdSuffix ".debug"
+                }
                 release {
+                    debuggable false
                     minifyEnabled true
+                    shrinkResources true
                     proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                     signingConfig signingConfigs.debug
                 }
@@ -128,36 +253,72 @@ jobs:
             buildFeatures {
                 viewBinding true
                 dataBinding true
+                buildConfig true
             }
             
             compileOptions {
                 sourceCompatibility JavaVersion.VERSION_1_8
                 targetCompatibility JavaVersion.VERSION_1_8
+                coreLibraryDesugaringEnabled true
             }
             
             kotlinOptions {
                 jvmTarget = '1.8'
+                freeCompilerArgs += ['-Xjvm-default=all']
+            }
+            
+            packaging {
+                resources {
+                    excludes += '/META-INF/{AL2.0,LGPL2.1}'
+                    excludes += '/META-INF/DEPENDENCIES'
+                    excludes += '/META-INF/LICENSE'
+                    excludes += '/META-INF/LICENSE.txt'
+                    excludes += '/META-INF/license.txt'
+                    excludes += '/META-INF/NOTICE'
+                    excludes += '/META-INF/NOTICE.txt'
+                    excludes += '/META-INF/notice.txt'
+                    excludes += '/META-INF/ASL2.0'
+                }
             }
         }
 
         dependencies {
+            // Core Android
             implementation 'androidx.core:core-ktx:1.12.0'
             implementation 'androidx.appcompat:appcompat:1.6.1'
             implementation 'com.google.android.material:material:1.11.0'
             implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+            implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
+            implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+            coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+            
+            // Lifecycle
             implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+            implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
+            implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.7.0'
+            implementation 'androidx.lifecycle:lifecycle-common-java8:2.7.0'
+            implementation 'androidx.lifecycle:lifecycle-service:2.7.0'
+            
+            // Activity & Fragment
             implementation 'androidx.activity:activity-ktx:1.8.2'
-            implementation 'androidx.recyclerview:recyclerview:1.3.2'
-            implementation 'androidx.documentfile:documentfile:1.0.1'
             implementation 'androidx.fragment:fragment-ktx:1.6.2'
+            
+            // UI Components
+            implementation 'androidx.recyclerview:recyclerview:1.3.2'
+            implementation 'androidx.viewpager2:viewpager2:1.0.0'
+            implementation 'androidx.cardview:cardview:1.0.0'
+            implementation 'androidx.preference:preference-ktx:1.2.1'
+            
+            // Navigation
             implementation 'androidx.navigation:navigation-fragment-ktx:2.7.6'
             implementation 'androidx.navigation:navigation-ui-ktx:2.7.6'
-            implementation 'androidx.viewpager2:viewpager2:1.0.0'
+            
+            // Storage & Files
+            implementation 'androidx.documentfile:documentfile:1.0.1'
             implementation 'androidx.room:room-runtime:2.6.1'
             implementation 'androidx.room:room-ktx:2.6.1'
-            implementation 'androidx.coordinatorlayout:coordinatorlayout:1.2.0'
             
-            // ExoPlayer - Complete suite
+            // ExoPlayer - Complete Media Framework
             implementation 'com.google.android.exoplayer:exoplayer:2.19.1'
             implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
             implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
@@ -167,15 +328,41 @@ jobs:
             implementation 'com.google.android.exoplayer:exoplayer-rtsp:2.19.1'
             implementation 'com.google.android.exoplayer:extension-okhttp:2.19.1'
             implementation 'com.google.android.exoplayer:extension-cronet:2.19.1'
+            implementation 'com.google.android.exoplayer:extension-mediasession:2.19.1'
             
-            // Network & JSON
+            // Network & HTTP - Enhanced for Downloads
             implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+            implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'
+            implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+            implementation 'com.squareup.retrofit2:converter-gson:2.9.0'
+            
+            // JSON & Serialization
             implementation 'com.google.code.gson:gson:2.10.1'
+            implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0'
             
-            // UI Components
+            // Image Loading
             implementation 'com.github.bumptech.glide:glide:4.16.0'
-            implementation 'com.airbnb.android:lottie:6.3.0'
+            implementation 'com.github.bumptech.glide:okhttp3-integration:4.16.0'
             
+            // Animation & UI Enhancement
+            implementation 'com.airbnb.android:lottie:6.3.0'
+            implementation 'com.github.chrisbanes:PhotoView:2.3.0'
+            implementation 'com.facebook.shimmer:shimmer:0.5.0'
+            
+            // Permissions
+            implementation 'com.karumi:dexter:6.2.3'
+            
+            // Utils
+            implementation 'com.jakewharton.timber:timber:5.0.1'
+            implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+            implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3'
+            
+            // File Downloader
+            implementation 'com.liulishuo.okdownload:okdownload:1.0.7'
+            implementation 'com.liulishuo.okdownload:sqlite:1.0.7'
+            implementation 'com.liulishuo.okdownload:okhttp:1.0.7'
+            
+            // Testing
             testImplementation 'junit:junit:4.13.2'
             androidTestImplementation 'androidx.test.ext:junit:1.1.5'
             androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
@@ -189,14 +376,38 @@ jobs:
         <manifest xmlns:android="http://schemas.android.com/apk/res/android"
             xmlns:tools="http://schemas.android.com/tools">
 
+            <!-- Internet & Network Permissions -->
             <uses-permission android:name="android.permission.INTERNET" />
             <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
             <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+            <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+            <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+            
+            <!-- Storage Permissions for Downloads -->
             <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
             <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
             <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+            <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+            <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+            
+            <!-- Media & Playback Permissions -->
             <uses-permission android:name="android.permission.WAKE_LOCK" />
             <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+            <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+            <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+            <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+            <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+            
+            <!-- Hardware Features -->
+            <uses-feature
+                android:name="android.hardware.touchscreen"
+                android:required="false" />
+            <uses-feature
+                android:name="android.software.leanback"
+                android:required="false" />
+            <uses-feature
+                android:name="android.hardware.wifi"
+                android:required="false" />
 
             <application
                 android:name=".NYPlayerApplication"
@@ -204,42 +415,176 @@ jobs:
                 android:dataExtractionRules="@xml/data_extraction_rules"
                 android:fullBackupContent="@xml/backup_rules"
                 android:icon="@mipmap/ic_launcher"
+                android:roundIcon="@mipmap/ic_launcher"
                 android:label="@string/app_name"
                 android:theme="@style/Theme.NYPlayer"
                 android:usesCleartextTraffic="true"
                 android:hardwareAccelerated="true"
                 android:networkSecurityConfig="@xml/network_security_config"
                 android:requestLegacyExternalStorage="true"
-                tools:targetApi="31">
+                android:supportsRtl="true"
+                android:largeHeap="true"
+                tools:targetApi="34">
                 
+                <!-- Main Activity -->
                 <activity
                     android:name=".MainActivity"
                     android:exported="true"
-                    android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
+                    android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode|layoutDirection"
                     android:launchMode="singleTask"
                     android:screenOrientation="unspecified"
+                    android:windowSoftInputMode="adjustResize"
                     android:theme="@style/Theme.NYPlayer.NoActionBar">
                     
                     <intent-filter android:priority="1000">
                         <action android:name="android.intent.action.MAIN" />
                         <category android:name="android.intent.category.LAUNCHER" />
                     </intent-filter>
+                    
+                    <!-- Video & Audio Intent Filters -->
+                    <intent-filter>
+                        <action android:name="android.intent.action.VIEW" />
+                        <category android:name="android.intent.category.DEFAULT" />
+                        <category android:name="android.intent.category.BROWSABLE" />
+                        <data android:scheme="http" android:mimeType="video/*" />
+                        <data android:scheme="https" android:mimeType="video/*" />
+                        <data android:scheme="http" android:mimeType="audio/*" />
+                        <data android:scheme="https" android:mimeType="audio/*" />
+                    </intent-filter>
+                    
+                    <!-- File Intent Filters -->
+                    <intent-filter>
+                        <action android:name="android.intent.action.VIEW" />
+                        <category android:name="android.intent.category.DEFAULT" />
+                        <data android:scheme="file" android:mimeType="video/*" />
+                        <data android:scheme="file" android:mimeType="audio/*" />
+                        <data android:scheme="content" android:mimeType="video/*" />
+                        <data android:scheme="content" android:mimeType="audio/*" />
+                    </intent-filter>
+                    
+                    <!-- Streaming Protocol Intent Filters -->
+                    <intent-filter>
+                        <action android:name="android.intent.action.VIEW" />
+                        <category android:name="android.intent.category.DEFAULT" />
+                        <category android:name="android.intent.category.BROWSABLE" />
+                        <data android:scheme="rtsp" />
+                        <data android:scheme="rtmp" />
+                        <data android:scheme="mms" />
+                        <data android:scheme="mmsh" />
+                    </intent-filter>
+                    
+                    <!-- File Extension Intent Filters -->
+                    <intent-filter>
+                        <action android:name="android.intent.action.VIEW" />
+                        <category android:name="android.intent.category.DEFAULT" />
+                        <category android:name="android.intent.category.BROWSABLE" />
+                        <data android:pathPattern=".*\\.m3u8" />
+                        <data android:pathPattern=".*\\.mpd" />
+                        <data android:pathPattern=".*\\.mp4" />
+                        <data android:pathPattern=".*\\.mkv" />
+                        <data android:pathPattern=".*\\.webm" />
+                        <data android:pathPattern=".*\\.3gp" />
+                        <data android:pathPattern=".*\\.ts" />
+                        <data android:pathPattern=".*\\.mov" />
+                        <data android:pathPattern=".*\\.mp3" />
+                        <data android:pathPattern=".*\\.flv" />
+                        <data android:pathPattern=".*\\.avi" />
+                        <data android:pathPattern=".*\\.wmv" />
+                        <data android:pathPattern=".*\\.m4v" />
+                        <data android:pathPattern=".*\\.m4a" />
+                        <data android:pathPattern=".*\\.aac" />
+                        <data android:pathPattern=".*\\.ogg" />
+                        <data android:pathPattern=".*\\.wav" />
+                        <data android:pathPattern=".*\\.flac" />
+                    </intent-filter>
                 </activity>
                 
+                <!-- Player Activity -->
                 <activity
                     android:name=".ui.PlayerActivity"
                     android:exported="false"
-                    android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
+                    android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode|layoutDirection"
                     android:screenOrientation="unspecified"
+                    android:launchMode="singleTop"
+                    android:parentActivityName=".MainActivity"
                     android:theme="@style/Theme.NYPlayer.Player" />
+                
+                <!-- Download Activity -->
+                <activity
+                    android:name=".ui.DownloadActivity"
+                    android:exported="false"
+                    android:parentActivityName=".MainActivity"
+                    android:theme="@style/Theme.NYPlayer.NoActionBar" />
+                
+                <!-- Settings Activity -->
+                <activity
+                    android:name=".ui.SettingsActivity"
+                    android:exported="false"
+                    android:parentActivityName=".MainActivity"
+                    android:theme="@style/Theme.NYPlayer.NoActionBar" />
+                
+                <!-- Playlist Activity -->
+                <activity
+                    android:name=".ui.PlaylistActivity"
+                    android:exported="false"
+                    android:parentActivityName=".MainActivity"
+                    android:theme="@style/Theme.NYPlayer.NoActionBar" />
                     
+                <!-- Local Files Activity -->
+                <activity
+                    android:name=".ui.LocalFilesActivity"
+                    android:exported="false"
+                    android:parentActivityName=".MainActivity"
+                    android:theme="@style/Theme.NYPlayer.NoActionBar" />
+                
+                <!-- Media Service -->
+                <service
+                    android:name=".data.MediaPlaybackService"
+                    android:exported="false"
+                    android:foregroundServiceType="mediaPlayback">
+                    <intent-filter>
+                        <action android:name="androidx.media.MediaBrowserServiceCompat" />
+                    </intent-filter>
+                </service>
+                
+                <!-- Download Service -->
+                <service
+                    android:name=".data.DownloadService"
+                    android:exported="false"
+                    android:foregroundServiceType="dataSync" />
+                
+                <!-- Notification Receiver -->
+                <receiver
+                    android:name=".utils.NotificationReceiver"
+                    android:exported="false">
+                    <intent-filter>
+                        <action android:name="com.nyplayer.ACTION_PLAY_PAUSE" />
+                        <action android:name="com.nyplayer.ACTION_NEXT" />
+                        <action android:name="com.nyplayer.ACTION_PREVIOUS" />
+                        <action android:name="com.nyplayer.ACTION_STOP" />
+                        <action android:name="com.nyplayer.ACTION_DOWNLOAD_PAUSE" />
+                        <action android:name="com.nyplayer.ACTION_DOWNLOAD_RESUME" />
+                        <action android:name="com.nyplayer.ACTION_DOWNLOAD_CANCEL" />
+                    </intent-filter>
+                </receiver>
+                
+                <!-- File Provider -->
+                <provider
+                    android:name="androidx.core.content.FileProvider"
+                    android:authorities="${applicationId}.fileprovider"
+                    android:exported="false"
+                    android:grantUriPermissions="true">
+                    <meta-data
+                        android:name="android.support.FILE_PROVIDER_PATHS"
+                        android:resource="@xml/file_paths" />
+                </provider>
+                
             </application>
         </manifest>
         EOF
         
-    - name: Create resources
+    - name: Create string resources
       run: |
-        # Create strings.xml
         cat > app/src/main/res/values/strings.xml << 'EOF'
         <resources>
             <string name="app_name">NY Player</string>
@@ -255,10 +600,19 @@ jobs:
             <string name="loading">Loading...</string>
             <string name="buffering">Buffering...</string>
             <string name="connecting">Connecting...</string>
+            <string name="downloading">Downloading...</string>
+            <string name="download_completed">Download Completed</string>
+            <string name="download_failed">Download Failed</string>
+            <string name="download_paused">Download Paused</string>
             <string name="error_invalid_url">Please enter a valid URL</string>
             <string name="error_load_failed">Failed to load media</string>
             <string name="error_network">Network error occurred</string>
+            <string name="error_permission_denied">Permission denied</string>
+            <string name="error_file_not_found">File not found</string>
+            <string name="error_unsupported_format">Unsupported media format</string>
+            <string name="error_storage_full">Storage space full</string>
             <string name="permission_storage">Storage permissions are required for local files</string>
+            <string name="permission_notification">Notification permissions are required for media controls</string>
             <string name="clear_all">Clear All</string>
             <string name="paste_url">Paste URL</string>
             <string name="test_url">Test URL</string>
@@ -268,66 +622,443 @@ jobs:
             <string name="hardware_acceleration">Hardware Acceleration</string>
             <string name="background_playback">Background Playback</string>
             <string name="about">About</string>
+            <string name="settings">Settings</string>
+            <string name="playlist">Playlist</string>
+            <string name="local_files">Local Files</string>
+            <string name="downloads">Downloads</string>
+            <string name="recent_streams">Recent Streams</string>
+            <string name="favorites">Favorites</string>
+            <string name="history">History</string>
+            <string name="home">Home</string>
+            <string name="sample_content">Sample Content</string>
+            <string name="no_media_found">No media files found</string>
+            <string name="no_recent_streams">No recent streams</string>
+            <string name="no_downloads">No downloads</string>
+            <string name="add_to_favorites">Add to Favorites</string>
+            <string name="remove_from_favorites">Remove from Favorites</string>
+            <string name="share">Share</string>
+            <string name="delete">Delete</string>
+            <string name="rename">Rename</string>
+            <string name="copy_url">Copy URL</string>
+            <string name="open_with">Open with</string>
+            <string name="download">Download</string>
+            <string name="download_video">Download Video</string>
+            <string name="download_audio">Download Audio</string>
+            <string name="resume_download">Resume Download</string>
+            <string name="pause_download">Pause Download</string>
+            <string name="cancel_download">Cancel Download</string>
+            <string name="retry_download">Retry Download</string>
+            <string name="download_quality">Download Quality</string>
+            <string name="download_location">Download Location</string>
+            <string name="download_progress">Download Progress</string>
+            <string name="download_speed">Download Speed</string>
+            <string name="download_size">Download Size</string>
+            <string name="video_quality">Video Quality</string>
+            <string name="audio_track">Audio Track</string>
+            <string name="subtitle_track">Subtitle Track</string>
+            <string name="playback_speed">Playback Speed</string>
+            <string name="picture_in_picture">Picture in Picture</string>
+            <string name="repeat_mode">Repeat Mode</string>
+            <string name="shuffle">Shuffle</string>
+            <string name="media_controls">Media Controls</string>
+            <string name="notification_channel_name">Media Playback</string>
+            <string name="notification_channel_description">Controls for media playback</string>
+            <string name="download_notification_channel_name">Downloads</string>
+            <string name="download_notification_channel_description">Download progress notifications</string>
+            <string name="now_playing">Now Playing</string>
+            <string name="previous">Previous</string>
+            <string name="next">Next</string>
+            <string name="play">Play</string>
+            <string name="pause">Pause</string>
+            <string name="stop">Stop</string>
+            <string name="seek_forward">Seek Forward</string>
+            <string name="seek_backward">Seek Backward</string>
+            <string name="volume">Volume</string>
+            <string name="brightness">Brightness</string>
+            <string name="fullscreen">Fullscreen</string>
+            <string name="exit_fullscreen">Exit Fullscreen</string>
+            <string name="cast">Cast</string>
+            <string name="network_info">Network Info</string>
+            <string name="media_info">Media Info</string>
+            <string name="resolution">Resolution</string>
+            <string name="bitrate">Bitrate</string>
+            <string name="codec">Codec</string>
+            <string name="duration">Duration</string>
+            <string name="file_size">File Size</string>
+            <string name="frame_rate">Frame Rate</string>
+            <string name="sample_rate">Sample Rate</string>
+            <string name="channels">Channels</string>
+            <string name="theme">Theme</string>
+            <string name="dark_theme">Dark Theme</string>
+            <string name="light_theme">Light Theme</string>
+            <string name="system_theme">System Default</string>
+            <string name="language">Language</string>
+            <string name="export_settings">Export Settings</string>
+            <string name="import_settings">Import Settings</string>
+            <string name="reset_settings">Reset Settings</string>
+            <string name="version">Version</string>
+            <string name="build_date">Build Date</string>
+            <string name="developer">Developer</string>
+            <string name="contact">Contact</string>
+            <string name="privacy_policy">Privacy Policy</string>
+            <string name="terms_of_service">Terms of Service</string>
+            <string name="open_source_licenses">Open Source Licenses</string>
+            <string name="rate_app">Rate App</string>
+            <string name="feedback">Feedback</string>
+            
+            <!-- User Agent Options -->
+            <string-array name="user_agent_options">
+                <item>Default</item>
+                <item>Chrome Desktop</item>
+                <item>Chrome Mobile</item>
+                <item>Firefox Desktop</item>
+                <item>Firefox Mobile</item>
+                <item>Safari Desktop</item>
+                <item>Safari Mobile</item>
+                <item>Edge Desktop</item>
+                <item>Edge Mobile</item>
+                <item>Opera Desktop</item>
+                <item>Opera Mobile</item>
+                <item>Custom</item>
+            </string-array>
+            
+            <!-- DRM Scheme Options -->
+            <string-array name="drm_scheme_options">
+                <item>widevine</item>
+                <item>playready</item>
+                <item>fairplay</item>
+                <item>clearkey</item>
+            </string-array>
+            
+            <!-- Video Quality Options -->
+            <string-array name="video_quality_options">
+                <item>Auto</item>
+                <item>144p</item>
+                <item>240p</item>
+                <item>360p</item>
+                <item>480p</item>
+                <item>720p</item>
+                <item>1080p</item>
+                <item>1440p</item>
+                <item>2160p</item>
+            </string-array>
+            
+            <!-- Download Quality Options -->
+            <string-array name="download_quality_options">
+                <item>Best Quality</item>
+                <item>High Quality</item>
+                <item>Medium Quality</item>
+                <item>Low Quality</item>
+                <item>Audio Only</item>
+            </string-array>
+            
+            <!-- Playback Speed Options -->
+            <string-array name="playback_speed_options">
+                <item>0.25x</item>
+                <item>0.5x</item>
+                <item>0.75x</item>
+                <item>Normal</item>
+                <item>1.25x</item>
+                <item>1.5x</item>
+                <item>1.75x</item>
+                <item>2.0x</item>
+            </string-array>
+            
+            <!-- Sample URLs for Testing -->
+            <string-array name="sample_urls">
+                <item>https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4</item>
+                <item>https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4</item>
+                <item>https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4</item>
+                <item>https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4</item>
+                <item>https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4</item>
+                <item>https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4</item>
+            </string-array>
+            
+            <string-array name="sample_names">
+                <item>Big Buck Bunny</item>
+                <item>Elephants Dream</item>
+                <item>For Bigger Blazes</item>
+                <item>For Bigger Escapes</item>
+                <item>For Bigger Fun</item>
+                <item>For Bigger Joyrides</item>
+            </string-array>
         </resources>
         EOF
         
-        # Create colors.xml
+    - name: Create color resources
+      run: |
         cat > app/src/main/res/values/colors.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <resources>
+            <!-- Primary Colors -->
             <color name="primary_dark">#1976D2</color>
             <color name="primary_light">#42A5F5</color>
-            <color name="accent_color">#FF4081</color>
+            <color name="primary_variant">#0D47A1</color>
+            
+            <!-- Secondary Colors -->
+            <color name="secondary">#FF4081</color>
+            <color name="secondary_variant">#C51162</color>
+            <color name="accent_color">@color/secondary</color>
+            
+            <!-- Background Colors -->
             <color name="background_dark">#121212</color>
+            <color name="background_light">#FFFFFF</color>
             <color name="surface_dark">#1E1E1E</color>
+            <color name="surface_light">#FFFFFF</color>
             <color name="input_background">#2E2E2E</color>
+            
+            <!-- Text Colors -->
+            <color name="text_primary_dark">#FFFFFF</color>
+            <color name="text_primary_light">#000000</color>
+            <color name="text_secondary_dark">#B0BEC5</color>
+            <color name="text_secondary_light">#757575</color>
             <color name="hint_text">#B0BEC5</color>
-            <color name="ic_launcher_background">#1976D2</color>
+            
+            <!-- Status Colors -->
+            <color name="success">#4CAF50</color>
+            <color name="warning">#FF9800</color>
+            <color name="error">#F44336</color>
+            <color name="info">#2196F3</color>
+            
+            <!-- Download Status Colors -->
+            <color name="download_progress">#2196F3</color>
+            <color name="download_completed">#4CAF50</color>
+            <color name="download_paused">#FF9800</color>
+            <color name="download_failed">#F44336</color>
+            
+            <!-- Material Colors -->
+            <color name="material_red">#F44336</color>
+            <color name="material_pink">#E91E63</color>
+            <color name="material_purple">#9C27B0</color>
+            <color name="material_deep_purple">#673AB7</color>
+            <color name="material_indigo">#3F51B5</color>
+            <color name="material_blue">#2196F3</color>
+            <color name="material_light_blue">#03A9F4</color>
+            <color name="material_cyan">#00BCD4</color>
+            <color name="material_teal">#009688</color>
+            <color name="material_green">#4CAF50</color>
+            <color name="material_light_green">#8BC34A</color>
+            <color name="material_lime">#CDDC39</color>
+            <color name="material_yellow">#FFEB3B</color>
+            <color name="material_amber">#FFC107</color>
+            <color name="material_orange">#FF9800</color>
+            <color name="material_deep_orange">#FF5722</color>
+            <color name="material_brown">#795548</color>
+            <color name="material_grey">#9E9E9E</color>
+            <color name="material_blue_grey">#607D8B</color>
+            
+            <!-- Launcher Icon -->
+            <color name="ic_launcher_background">@color/primary_dark</color>
+            
+            <!-- Transparent -->
+            <color name="transparent">#00000000</color>
+            <color name="semi_transparent_black">#80000000</color>
+            <color name="semi_transparent_white">#80FFFFFF</color>
+            
+            <!-- Overlay Colors -->
+            <color name="overlay_dark">#CC000000</color>
+            <color name="overlay_light">#CCFFFFFF</color>
+            
+            <!-- Player Colors -->
+            <color name="player_background">#000000</color>
+            <color name="player_control_background">#CC000000</color>
+            <color name="progress_primary">#FF4081</color>
+            <color name="progress_secondary">#80FFFFFF</color>
         </resources>
         EOF
         
-        # Create color selector
         cat > app/src/main/res/color/bottom_nav_selector.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <selector xmlns:android="http://schemas.android.com/apk/res/android">
             <item android:color="@color/primary_light" android:state_checked="true" />
-            <item android:color="#80FFFFFF" />
+            <item android:color="@color/text_secondary_dark" />
         </selector>
         EOF
         
-        # Create styles.xml
+    - name: Create style resources
+      run: |
         cat > app/src/main/res/values/styles.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <resources>
+            
+            <!-- Base Application Theme -->
             <style name="Theme.NYPlayer" parent="Theme.MaterialComponents.DayNight">
                 <item name="colorPrimary">@color/primary_dark</item>
-                <item name="colorPrimaryVariant">@color/primary_dark</item>
-                <item name="colorOnPrimary">@android:color/white</item>
-                <item name="colorSecondary">@color/accent_color</item>
-                <item name="colorSecondaryVariant">@color/accent_color</item>
-                <item name="colorOnSecondary">@android:color/white</item>
+                <item name="colorPrimaryVariant">@color/primary_variant</item>
+                <item name="colorOnPrimary">@color/text_primary_dark</item>
+                <item name="colorSecondary">@color/secondary</item>
+                <item name="colorSecondaryVariant">@color/secondary_variant</item>
+                <item name="colorOnSecondary">@color/text_primary_dark</item>
                 <item name="android:colorBackground">@color/background_dark</item>
                 <item name="colorSurface">@color/surface_dark</item>
-                <item name="colorOnBackground">@android:color/white</item>
-                <item name="colorOnSurface">@android:color/white</item>
+                <item name="colorOnBackground">@color/text_primary_dark</item>
+                <item name="colorOnSurface">@color/text_primary_dark</item>
+                <item name="colorError">@color/error</item>
+                <item name="android:statusBarColor">@color/primary_dark</item>
+                <item name="android:navigationBarColor">@color/surface_dark</item>
+                <item name="android:windowBackground">@color/background_dark</item>
             </style>
             
+            <!-- No Action Bar Theme -->
             <style name="Theme.NYPlayer.NoActionBar">
                 <item name="windowActionBar">false</item>
                 <item name="windowNoTitle">true</item>
+                <item name="android:statusBarColor">@android:color/transparent</item>
             </style>
             
+            <!-- Player Theme -->
             <style name="Theme.NYPlayer.Player" parent="Theme.NYPlayer.NoActionBar">
                 <item name="android:windowFullscreen">true</item>
                 <item name="android:windowContentOverlay">@null</item>
-                <item name="android:windowBackground">@android:color/black</item>
+                <item name="android:windowBackground">@color/player_background</item>
+                <item name="android:navigationBarColor">@color/player_background</item>
+                <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
             </style>
+            
+            <!-- Settings Theme -->
+            <style name="Theme.NYPlayer.Settings" parent="Theme.NYPlayer">
+                <item name="preferenceTheme">@style/PreferenceThemeOverlay.v14.Material</item>
+            </style>
+            
+            <!-- Text Styles -->
+            <style name="TextAppearance.NYPlayer.Headline1" parent="TextAppearance.MaterialComponents.Headline1">
+                <item name="android:textColor">@color/text_primary_dark</item>
+            </style>
+            
+            <style name="TextAppearance.NYPlayer.Headline2" parent="TextAppearance.MaterialComponents.Headline2">
+                <item name="android:textColor">@color/text_primary_dark</item>
+            </style>
+            
+            <style name="TextAppearance.NYPlayer.Subtitle1" parent="TextAppearance.MaterialComponents.Subtitle1">
+                <item name="android:textColor">@color/text_secondary_dark</item>
+            </style>
+            
+            <style name="TextAppearance.NYPlayer.Body1" parent="TextAppearance.MaterialComponents.Body1">
+                <item name="android:textColor">@color/text_primary_dark</item>
+            </style>
+            
+            <style name="TextAppearance.NYPlayer.Body2" parent="TextAppearance.MaterialComponents.Body2">
+                <item name="android:textColor">@color/text_secondary_dark</item>
+            </style>
+            
+            <!-- Button Styles -->
+            <style name="Widget.NYPlayer.Button" parent="Widget.MaterialComponents.Button">
+                <item name="android:textColor">@color/text_primary_dark</item>
+                <item name="backgroundTint">@color/primary_dark</item>
+            </style>
+            
+            <style name="Widget.NYPlayer.Button.Outlined" parent="Widget.MaterialComponents.Button.OutlinedButton">
+                <item name="android:textColor">@color/primary_dark</item>
+                <item name="strokeColor">@color/primary_dark</item>
+            </style>
+            
+            <style name="Widget.NYPlayer.Button.Text" parent="Widget.MaterialComponents.Button.TextButton">
+                <item name="android:textColor">@color/primary_dark</item>
+            </style>
+            
+            <!-- Card Styles -->
+            <style name="Widget.NYPlayer.CardView" parent="Widget.MaterialComponents.CardView">
+                <item name="cardBackgroundColor">@color/surface_dark</item>
+                <item name="cardCornerRadius">8dp</item>
+                <item name="cardElevation">4dp</item>
+                <item name="cardUseCompatPadding">true</item>
+            </style>
+            
+            <!-- Progress Bar Styles -->
+            <style name="Widget.NYPlayer.ProgressBar" parent="Widget.AppCompat.ProgressBar.Horizontal">
+                <item name="android:progressTint">@color/progress_primary</item>
+                <item name="android:progressBackgroundTint">@color/progress_secondary</item>
+            </style>
+            
+            <!-- Download Progress Bar Styles -->
+            <style name="Widget.NYPlayer.DownloadProgressBar" parent="Widget.AppCompat.ProgressBar.Horizontal">
+                <item name="android:progressTint">@color/download_progress</item>
+                <item name="android:progressBackgroundTint">@color/progress_secondary</item>
+            </style>
+            
+        </resources>
+        EOF
+        
+    - name: Create dimension resources
+      run: |
+        cat > app/src/main/res/values/dimens.xml << 'EOF'
+        <resources>
+            <!-- Default screen margins, per the Android Design guidelines. -->
+            <dimen name="activity_horizontal_margin">16dp</dimen>
+            <dimen name="activity_vertical_margin">16dp</dimen>
+            
+            <!-- Padding -->
+            <dimen name="padding_small">8dp</dimen>
+            <dimen name="padding_medium">16dp</dimen>
+            <dimen name="padding_large">24dp</dimen>
+            <dimen name="padding_extra_large">32dp</dimen>
+            
+            <!-- Margin -->
+            <dimen name="margin_small">8dp</dimen>
+            <dimen name="margin_medium">16dp</dimen>
+            <dimen name="margin_large">24dp</dimen>
+            <dimen name="margin_extra_large">32dp</dimen>
+            
+            <!-- Text Sizes -->
+            <dimen name="text_size_micro">10sp</dimen>
+            <dimen name="text_size_small">12sp</dimen>
+            <dimen name="text_size_medium">14sp</dimen>
+            <dimen name="text_size_large">16sp</dimen>
+            <dimen name="text_size_extra_large">18sp</dimen>
+            <dimen name="text_size_huge">20sp</dimen>
+            
+            <!-- Button Heights -->
+            <dimen name="button_height_small">36dp</dimen>
+            <dimen name="button_height_medium">48dp</dimen>
+            <dimen name="button_height_large">56dp</dimen>
+            
+            <!-- Card -->
+            <dimen name="card_corner_radius">8dp</dimen>
+            <dimen name="card_elevation">4dp</dimen>
+            
+            <!-- List Items -->
+            <dimen name="list_item_height">56dp</dimen>
+            <dimen name="list_item_height_large">72dp</dimen>
+            <dimen name="list_item_icon_size">24dp</dimen>
+            <dimen name="list_item_icon_size_large">40dp</dimen>
+            
+            <!-- Media Controls -->
+            <dimen name="media_control_size">48dp</dimen>
+            <dimen name="media_control_size_large">56dp</dimen>
+            <dimen name="progress_bar_height">4dp</dimen>
+            <dimen name="seek_bar_height">2dp</dimen>
+            
+            <!-- Bottom Navigation -->
+            <dimen name="bottom_nav_height">56dp</dimen>
+            
+            <!-- Toolbar -->
+            <dimen name="toolbar_height">56dp</dimen>
+            
+            <!-- Grid -->
+            <dimen name="grid_spacing">8dp</dimen>
+            <dimen name="grid_item_width">120dp</dimen>
+            <dimen name="grid_item_height">180dp</dimen>
+            
+            <!-- Player -->
+            <dimen name="player_control_padding">16dp</dimen>
+            <dimen name="player_control_margin">8dp</dimen>
+            
+            <!-- FAB -->
+            <dimen name="fab_margin">16dp</dimen>
+            
+            <!-- Dialog -->
+            <dimen name="dialog_padding">24dp</dimen>
+            <dimen name="dialog_margin">16dp</dimen>
+            
+            <!-- Download -->
+            <dimen name="download_progress_height">6dp</dimen>
+            <dimen name="download_item_height">80dp</dimen>
         </resources>
         EOF
         
     - name: Create drawable resources
       run: |
-        # Create simple vector drawables for menu icons
+        # Create vector drawables for navigation icons
         cat > app/src/main/res/drawable/ic_home.xml << 'EOF'
         <vector xmlns:android="http://schemas.android.com/apk/res/android"
             android:width="24dp"
@@ -419,6 +1150,84 @@ jobs:
         </vector>
         EOF
         
+        cat > app/src/main/res/drawable/ic_download.xml << 'EOF'
+        <vector xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24"
+            android:tint="?attr/colorOnSurface">
+          <path
+              android:fillColor="@android:color/white"
+              android:pathData="M19,9h-4V3H9v6H5l7,7 7,-7zM5,18v2h14v-2H5z"/>
+        </vector>
+        EOF
+        
+        cat > app/src/main/res/drawable/ic_pause.xml << 'EOF'
+        <vector xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24"
+            android:tint="?attr/colorOnSurface">
+          <path
+              android:fillColor="@android:color/white"
+              android:pathData="M6,19h4L10,5L6,5v14zM14,5v14h4L18,5h-4z"/>
+        </vector>
+        EOF
+        
+        cat > app/src/main/res/drawable/ic_stop.xml << 'EOF'
+        <vector xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24"
+            android:tint="?attr/colorOnSurface">
+          <path
+              android:fillColor="@android:color/white"
+              android:pathData="M6,6h12v12H6z"/>
+        </vector>
+        EOF
+        
+        cat > app/src/main/res/drawable/ic_more_vert.xml << 'EOF'
+        <vector xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24"
+            android:tint="?attr/colorOnSurface">
+          <path
+              android:fillColor="@android:color/white"
+              android:pathData="M12,8c1.1,0 2,-0.9 2,-2s-0.9,-2 -2,-2 -2,0.9 -2,2 0.9,2 2,2zM12,10c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2zM12,16c-1.1,0 -2,0.9 -2,2s0.9,2 2,2 2,-0.9 2,-2 -0.9,-2 -2,-2z"/>
+        </vector>
+        EOF
+        
+        cat > app/src/main/res/drawable/ic_error.xml << 'EOF'
+        <vector xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24"
+            android:tint="?attr/colorOnSurface">
+          <path
+              android:fillColor="@android:color/white"
+              android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM13,17h-2v-2h2v2zM13,13h-2L11,7h2v6z"/>
+        </vector>
+        EOF
+        
+        cat > app/src/main/res/drawable/ic_arrow_back.xml << 'EOF'
+        <vector xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24"
+            android:tint="?attr/colorOnSurface">
+          <path
+              android:fillColor="@android:color/white"
+              android:pathData="M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z"/>
+        </vector>
+        EOF
+        
         cat > app/src/main/res/drawable/ic_launcher_foreground.xml << 'EOF'
         <vector xmlns:android="http://schemas.android.com/apk/res/android"
             android:width="108dp"
@@ -443,165 +1252,143 @@ jobs:
         </vector>
         EOF
         
-    - name: Create menu and layout files
+        cat > app/src/main/res/drawable/loading_background.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <shape xmlns:android="http://schemas.android.com/apk/res/android"
+            android:shape="rectangle">
+            <solid android:color="@color/overlay_dark" />
+            <corners android:radius="8dp" />
+        </shape>
+        EOF
+        
+        cat > app/src/main/res/drawable/overlay_background.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <shape xmlns:android="http://schemas.android.com/apk/res/android"
+            android:shape="rectangle">
+            <solid android:color="@color/semi_transparent_black" />
+            <corners android:radius="4dp" />
+        </shape>
+        EOF
+        
+        cat > app/src/main/res/drawable/gradient_top.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <shape xmlns:android="http://schemas.android.com/apk/res/android">
+            <gradient
+                android:startColor="#CC000000"
+                android:endColor="@android:color/transparent"
+                android:angle="270" />
+        </shape>
+        EOF
+        
+    - name: Create menu files
       run: |
-        # Create menus
         cat > app/src/main/res/menu/main_menu.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <menu xmlns:android="http://schemas.android.com/apk/res/android"
             xmlns:app="http://schemas.android.com/apk/res-auto">
+            
+            <item
+                android:id="@+id/action_downloads"
+                android:title="@string/downloads"
+                android:icon="@drawable/ic_download"
+                app:showAsAction="ifRoom" />
+                
+            <item
+                android:id="@+id/action_settings"
+                android:title="@string/settings"
+                android:icon="@drawable/ic_settings"
+                app:showAsAction="never" />
+                
             <item
                 android:id="@+id/action_about"
-                android:title="About"
+                android:title="@string/about"
                 app:showAsAction="never" />
+                
         </menu>
         EOF
         
         cat > app/src/main/res/menu/bottom_navigation.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <menu xmlns:android="http://schemas.android.com/apk/res/android">
+            
             <item
                 android:id="@+id/nav_home"
-                android:title="Home"
+                android:title="@string/home"
                 android:icon="@drawable/ic_home" />
+                
             <item
                 android:id="@+id/nav_local"
-                android:title="Local"
+                android:title="@string/local_files"
                 android:icon="@drawable/ic_local_movies" />
+                
             <item
-                android:id="@+id/nav_sample"
-                android:title="Sample Content"
-                android:icon="@drawable/ic_featured_play_list" />
+                android:id="@+id/nav_downloads"
+                android:title="@string/downloads"
+                android:icon="@drawable/ic_download" />
+                
             <item
                 android:id="@+id/nav_playlist"
-                android:title="Playlist"
+                android:title="@string/playlist"
                 android:icon="@drawable/ic_playlist_play" />
+                
             <item
                 android:id="@+id/nav_settings"
-                android:title="Settings"
+                android:title="@string/settings"
                 android:icon="@drawable/ic_settings" />
+                
         </menu>
         EOF
         
-    - name: Create layout files
-      run: |
-        cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+        cat > app/src/main/res/menu/download_item_menu.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
-        <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
-            xmlns:app="http://schemas.android.com/apk/res-auto"
-            xmlns:tools="http://schemas.android.com/tools"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@color/background_dark"
-            tools:context=".MainActivity">
-
-            <com.google.android.material.appbar.AppBarLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar">
-
-                <com.google.android.material.appbar.MaterialToolbar
-                    android:id="@+id/toolbar"
-                    android:layout_width="match_parent"
-                    android:layout_height="?attr/actionBarSize"
-                    android:background="@color/primary_dark"
-                    app:title="@string/app_name"
-                    app:titleTextColor="@android:color/white"
-                    app:menu="@menu/main_menu" />
-
-            </com.google.android.material.appbar.AppBarLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:orientation="vertical"
-                app:layout_behavior="@string/appbar_scrolling_view_behavior">
-
-                <androidx.core.widget.NestedScrollView
-                    android:id="@+id/inputScrollView"
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:background="@color/surface_dark">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:hint="Media Stream URL"
-                            app:boxBackgroundColor="@color/input_background"
-                            app:boxBackgroundMode="filled"
-                            app:endIconMode="clear_text"
-                            app:hintTextColor="@color/hint_text">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/urlInput"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="textUri"
-                                android:textColor="@android:color/white"
-                                android:textColorHint="@color/hint_text"
-                                android:maxLines="3"
-                                android:scrollbars="vertical" />
-                        </com.google.android.material.textfield.TextInputLayout>
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/playButton"
-                            android:layout_width="match_parent"
-                            android:layout_height="56dp"
-                            android:layout_marginTop="20dp"
-                            android:text="▶ PLAY STREAM"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            app:icon="@drawable/ic_play_circle"
-                            app:iconGravity="textStart"
-                            app:iconSize="24dp"
-                            style="@style/Widget.MaterialComponents.Button" />
-
-                    </LinearLayout>
-
-                </androidx.core.widget.NestedScrollView>
-
-                <com.google.android.material.bottomnavigation.BottomNavigationView
-                    android:id="@+id/bottomNavigation"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@color/surface_dark"
-                    app:itemIconTint="@color/bottom_nav_selector"
-                    app:itemTextColor="@color/bottom_nav_selector"
-                    app:menu="@menu/bottom_navigation" />
-
-            </LinearLayout>
-
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/fab"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="bottom|end"
-                android:layout_margin="16dp"
-                android:src="@drawable/ic_play_arrow"
-                app:backgroundTint="@color/accent_color"
-                app:tint="@android:color/white" />
-
-        </androidx.coordinatorlayout.widget.CoordinatorLayout>
+        <menu xmlns:android="http://schemas.android.com/apk/res/android">
+            
+            <item
+                android:id="@+id/action_play"
+                android:title="@string/play"
+                android:icon="@drawable/ic_play_arrow" />
+                
+            <item
+                android:id="@+id/action_pause"
+                android:title="@string/pause_download"
+                android:icon="@drawable/ic_pause" />
+                
+            <item
+                android:id="@+id/action_resume"
+                android:title="@string/resume_download"
+                android:icon="@drawable/ic_play_arrow" />
+                
+            <item
+                android:id="@+id/action_cancel"
+                android:title="@string/cancel_download"
+                android:icon="@drawable/ic_stop" />
+                
+            <item
+                android:id="@+id/action_delete"
+                android:title="@string/delete"
+                android:icon="@drawable/ic_error" />
+                
+            <item
+                android:id="@+id/action_share"
+                android:title="@string/share" />
+                
+        </menu>
         EOF
         
-    - name: Create XML files and launcher icon
+    - name: Create XML configuration files
       run: |
-        # Create XML files
         cat > app/src/main/res/xml/data_extraction_rules.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <data-extraction-rules>
             <cloud-backup>
                 <include domain="file" path="."/>
+                <exclude domain="file" path="cache/"/>
+                <exclude domain="file" path="no_backup/"/>
             </cloud-backup>
             <device-transfer>
                 <include domain="file" path="."/>
+                <exclude domain="file" path="cache/"/>
+                <exclude domain="file" path="no_backup/"/>
             </device-transfer>
         </data-extraction-rules>
         EOF
@@ -609,6 +1396,9 @@ jobs:
         cat > app/src/main/res/xml/backup_rules.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <full-backup-content>
+            <exclude domain="file" path="cache" />
+            <exclude domain="file" path="no_backup" />
+            <exclude domain="database" name="temp.db" />
         </full-backup-content>
         EOF
         
@@ -620,16 +1410,30 @@ jobs:
                 <domain includeSubdomains="true">192.168.1.1</domain>
                 <domain includeSubdomains="true">10.0.2.2</domain>
                 <domain includeSubdomains="true">127.0.0.1</domain>
+                <domain includeSubdomains="true">0.0.0.0</domain>
             </domain-config>
             <base-config cleartextTrafficPermitted="true">
                 <trust-anchors>
                     <certificates src="system"/>
+                    <certificates src="user"/>
                 </trust-anchors>
             </base-config>
         </network-security-config>
         EOF
         
-        # Create launcher icon
+        cat > app/src/main/res/xml/file_paths.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <paths xmlns:android="http://schemas.android.com/apk/res/android">
+            <external-path name="external_files" path="."/>
+            <external-files-path name="external_files" path="."/>
+            <cache-path name="cache" path="."/>
+            <external-cache-path name="external_cache" path="."/>
+            <files-path name="files" path="."/>
+        </paths>
+        EOF
+        
+    - name: Create launcher icon
+      run: |
         cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
@@ -638,17 +1442,748 @@ jobs:
         </adaptive-icon>
         EOF
         
-    - name: Create minimal source files
+    - name: Create main activity layout
+      run: |
+        cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            xmlns:tools="http://schemas.android.com/tools"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/background_dark"
+            android:fitsSystemWindows="true"
+            tools:context=".MainActivity">
+
+            <!-- App Bar Layout -->
+            <com.google.android.material.appbar.AppBarLayout
+                android:id="@+id/appBarLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fitsSystemWindows="true"
+                app:elevation="0dp">
+
+                <com.google.android.material.appbar.MaterialToolbar
+                    android:id="@+id/toolbar"
+                    android:layout_width="match_parent"
+                    android:layout_height="?attr/actionBarSize"
+                    android:background="@color/primary_dark"
+                    app:title="@string/app_name"
+                    app:titleTextColor="@color/text_primary_dark"
+                    app:menu="@menu/main_menu"
+                    app:navigationIconTint="@color/text_primary_dark" />
+
+            </com.google.android.material.appbar.AppBarLayout>
+
+            <!-- Main Content -->
+            <androidx.core.widget.NestedScrollView
+                android:id="@+id/nestedScrollView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:fillViewport="true"
+                app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical">
+
+                    <!-- ViewPager2 for different tabs -->
+                    <androidx.viewpager2.widget.ViewPager2
+                        android:id="@+id/viewPager"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1" />
+
+                    <!-- Bottom Navigation -->
+                    <com.google.android.material.bottomnavigation.BottomNavigationView
+                        android:id="@+id/bottomNavigation"
+                        android:layout_width="match_parent"
+                        android:layout_height="@dimen/bottom_nav_height"
+                        android:background="@color/surface_dark"
+                        app:itemIconTint="@color/bottom_nav_selector"
+                        app:itemTextColor="@color/bottom_nav_selector"
+                        app:menu="@menu/bottom_navigation"
+                        app:labelVisibilityMode="labeled" />
+
+                </LinearLayout>
+
+            </androidx.core.widget.NestedScrollView>
+
+            <!-- Floating Action Button with Download Option -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fab"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end"
+                android:layout_marginEnd="@dimen/fab_margin"
+                android:layout_marginBottom="80dp"
+                android:src="@drawable/ic_play_arrow"
+                app:backgroundTint="@color/secondary"
+                app:tint="@color/text_primary_dark"
+                android:contentDescription="@string/play" />
+
+        </androidx.coordinatorlayout.widget.CoordinatorLayout>
+        EOF
+        
+    - name: Create download fragment layout
+      run: |
+        cat > app/src/main/res/layout/fragment_downloads.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            xmlns:tools="http://schemas.android.com/tools"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="@dimen/padding_medium"
+            tools:context=".fragments.DownloadsFragment">
+
+            <!-- Download Control Panel -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.NYPlayer.CardView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/margin_medium">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="@dimen/padding_medium">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Download Manager"
+                        android:textAppearance="@style/TextAppearance.NYPlayer.Headline2"
+                        android:textSize="@dimen/text_size_large"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="@dimen/margin_medium" />
+
+                    <!-- URL Input for Download -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="@dimen/margin_small"
+                        android:hint="Enter URL to Download"
+                        app:boxBackgroundColor="@color/input_background"
+                        app:boxBackgroundMode="filled"
+                        app:endIconMode="clear_text"
+                        app:hintTextColor="@color/hint_text">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/downloadUrlInput"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textUri"
+                            android:textColor="@color/text_primary_dark"
+                            android:textColorHint="@color/hint_text"
+                            android:maxLines="2" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <!-- Download Quality Selector -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.MaterialComponents.TextInputLayout.FilledBox.ExposedDropdownMenu"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="@dimen/margin_medium"
+                        android:hint="@string/download_quality"
+                        app:boxBackgroundColor="@color/input_background"
+                        app:hintTextColor="@color/hint_text">
+
+                        <AutoCompleteTextView
+                            android:id="@+id/qualityDropdown"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="none"
+                            android:text="Best Quality"
+                            android:textColor="@color/text_primary_dark"
+                            android:textColorHint="@color/hint_text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <!-- Download Actions -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/downloadButton"
+                            style="@style/Widget.NYPlayer.Button"
+                            android:layout_width="0dp"
+                            android:layout_height="@dimen/button_height_medium"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="@dimen/margin_small"
+                            android:text="@string/download"
+                            android:textSize="@dimen/text_size_medium"
+                            app:icon="@drawable/ic_download"
+                            app:iconGravity="textStart"
+                            app:iconSize="18dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/pauseAllButton"
+                            style="@style/Widget.NYPlayer.Button.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_height="@dimen/button_height_medium"
+                            android:layout_weight="1"
+                            android:layout_marginStart="@dimen/margin_small"
+                            android:text="Pause All"
+                            android:textSize="@dimen/text_size_medium"
+                            app:icon="@drawable/ic_pause"
+                            app:iconGravity="textStart"
+                            app:iconSize="18dp" />
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Downloads List -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.NYPlayer.CardView"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:padding="@dimen/padding_medium">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/downloads"
+                        android:textAppearance="@style/TextAppearance.NYPlayer.Subtitle1"
+                        android:textSize="@dimen/text_size_medium"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="@dimen/margin_small" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/downloadsRecyclerView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scrollbars="vertical"
+                        tools:listitem="@layout/item_download" />
+
+                    <TextView
+                        android:id="@+id/noDownloadsText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="@string/no_downloads"
+                        android:textAppearance="@style/TextAppearance.NYPlayer.Body2"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+        EOF
+        
+    - name: Create download item layout
+      run: |
+        cat > app/src/main/res/layout/item_download.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            xmlns:tools="http://schemas.android.com/tools"
+            style="@style/Widget.NYPlayer.CardView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="@dimen/margin_small">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/padding_medium">
+
+                <!-- Title and Actions Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="@dimen/margin_small">
+
+                    <!-- File Icon -->
+                    <ImageView
+                        android:id="@+id/fileIcon"
+                        android:layout_width="@dimen/list_item_icon_size_large"
+                        android:layout_height="@dimen/list_item_icon_size_large"
+                        android:layout_marginEnd="@dimen/margin_medium"
+                        android:src="@drawable/ic_local_movies"
+                        android:tint="@color/primary_light" />
+
+                    <!-- File Info -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/fileName"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:textAppearance="@style/TextAppearance.NYPlayer.Body1"
+                            android:textSize="@dimen/text_size_medium"
+                            android:textStyle="bold"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            tools:text="Sample Video File.mp4" />
+
+                        <TextView
+                            android:id="@+id/downloadStatus"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textAppearance="@style/TextAppearance.NYPlayer.Body2"
+                            android:textSize="@dimen/text_size_small"
+                            tools:text="Downloading... 50%" />
+
+                        <TextView
+                            android:id="@+id/downloadInfo"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:textAppearance="@style/TextAppearance.NYPlayer.Body2"
+                            android:textSize="@dimen/text_size_micro"
+                            tools:text="125 MB / 250 MB • 2.5 MB/s" />
+
+                    </LinearLayout>
+
+                    <!-- Action Menu -->
+                    <ImageButton
+                        android:id="@+id/actionMenu"
+                        android:layout_width="@dimen/media_control_size"
+                        android:layout_height="@dimen/media_control_size"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_more_vert"
+                        android:contentDescription="Actions"
+                        android:tint="@color/text_secondary_dark" />
+
+                </LinearLayout>
+
+                <!-- Progress Bar -->
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/downloadProgress"
+                    style="@style/Widget.NYPlayer.DownloadProgressBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/download_progress_height"
+                    android:layout_marginTop="@dimen/margin_small"
+                    android:progress="50"
+                    app:indicatorColor="@color/download_progress"
+                    app:trackColor="@color/progress_secondary"
+                    app:trackCornerRadius="3dp" />
+
+                <!-- Quick Actions (visible when downloading) -->
+                <LinearLayout
+                    android:id="@+id/quickActionsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/margin_small"
+                    android:orientation="horizontal"
+                    android:gravity="end"
+                    android:visibility="gone">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/pauseButton"
+                        style="@style/Widget.NYPlayer.Button.Text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="@dimen/button_height_small"
+                        android:layout_marginEnd="@dimen/margin_small"
+                        android:text="@string/pause"
+                        android:textSize="@dimen/text_size_small" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/cancelButton"
+                        style="@style/Widget.NYPlayer.Button.Text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="@dimen/button_height_small"
+                        android:text="@string/cancel_download"
+                        android:textSize="@dimen/text_size_small"
+                        android:textColor="@color/error" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+        EOF
+        
+    - name: Create home fragment layout
+      run: |
+        cat > app/src/main/res/layout/fragment_home.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            xmlns:tools="http://schemas.android.com/tools"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="@dimen/padding_medium"
+            tools:context=".fragments.HomeFragment">
+
+            <!-- Stream Input Section -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.NYPlayer.CardView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/margin_medium">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="@dimen/padding_medium">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/network_stream_player"
+                        android:textAppearance="@style/TextAppearance.NYPlayer.Headline2"
+                        android:textSize="@dimen/text_size_large"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="@dimen/margin_medium" />
+
+                    <!-- Media Stream URL -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/urlInputLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="@dimen/margin_small"
+                        android:hint="@string/media_stream_url"
+                        app:boxBackgroundColor="@color/input_background"
+                        app:boxBackgroundMode="filled"
+                        app:endIconMode="clear_text"
+                        app:hintTextColor="@color/hint_text"
+                        app:helperTextEnabled="true"
+                        app:helperText="Enter streaming URL (HTTP/HTTPS/RTSP/HLS/DASH)">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/urlInput"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textUri"
+                            android:textColor="@color/text_primary_dark"
+                            android:textColorHint="@color/hint_text"
+                            android:maxLines="3"
+                            android:scrollbars="vertical" />
+
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <!-- Play and Download Buttons -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/margin_large"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/playButton"
+                            style="@style/Widget.NYPlayer.Button"
+                            android:layout_width="0dp"
+                            android:layout_height="@dimen/button_height_large"
+                            android:layout_weight="2"
+                            android:layout_marginEnd="@dimen/margin_small"
+                            android:text="@string/play_stream"
+                            android:textSize="@dimen/text_size_medium"
+                            android:textStyle="bold"
+                            app:icon="@drawable/ic_play_circle"
+                            app:iconGravity="textStart"
+                            app:iconSize="20dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/downloadButton"
+                            style="@style/Widget.NYPlayer.Button.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_height="@dimen/button_height_large"
+                            android:layout_weight="1"
+                            android:layout_marginStart="@dimen/margin_small"
+                            android:text="@string/download"
+                            android:textSize="@dimen/text_size_medium"
+                            app:icon="@drawable/ic_download"
+                            app:iconGravity="textStart"
+                            app:iconSize="18dp" />
+
+                    </LinearLayout>
+
+                    <!-- Quick Actions -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/margin_medium"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/clearButton"
+                            style="@style/Widget.NYPlayer.Button.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_height="@dimen/button_height_medium"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="@dimen/margin_small"
+                            android:text="@string/clear_all"
+                            android:textSize="@dimen/text_size_small" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/pasteButton"
+                            style="@style/Widget.NYPlayer.Button.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_height="@dimen/button_height_medium"
+                            android:layout_weight="1"
+                            android:layout_marginHorizontal="@dimen/margin_small"
+                            android:text="@string/paste_url"
+                            android:textSize="@dimen/text_size_small" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/testButton"
+                            style="@style/Widget.NYPlayer.Button.Outlined"
+                            android:layout_width="0dp"
+                            android:layout_height="@dimen/button_height_medium"
+                            android:layout_weight="1"
+                            android:layout_marginStart="@dimen/margin_small"
+                            android:text="@string/test_url"
+                            android:textSize="@dimen/text_size_small" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Recent Streams Section -->
+            <com.google.android.material.card.MaterialCardView
+                style="@style/Widget.NYPlayer.CardView"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:padding="@dimen/padding_medium">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/recent_streams"
+                        android:textAppearance="@style/TextAppearance.NYPlayer.Subtitle1"
+                        android:textSize="@dimen/text_size_medium"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="@dimen/margin_small" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/recentStreamsRecyclerView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scrollbars="vertical"
+                        tools:listitem="@layout/item_recent_stream" />
+
+                    <TextView
+                        android:id="@+id/noRecentStreamsText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="@string/no_recent_streams"
+                        android:textAppearance="@style/TextAppearance.NYPlayer.Body2"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+        EOF
+        
+    - name: Create recent stream item layout
+      run: |
+        cat > app/src/main/res/layout/item_recent_stream.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            xmlns:tools="http://schemas.android.com/tools"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/list_item_height_large"
+            android:orientation="horizontal"
+            android:padding="@dimen/padding_small"
+            android:gravity="center_vertical"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:id="@+id/streamIcon"
+                android:layout_width="@dimen/list_item_icon_size_large"
+                android:layout_height="@dimen/list_item_icon_size_large"
+                android:layout_marginEnd="@dimen/margin_medium"
+                android:src="@drawable/ic_play_circle"
+                android:tint="@color/primary_light" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/streamTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TextAppearance.NYPlayer.Body1"
+                    android:textSize="@dimen/text_size_medium"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    tools:text="Sample Stream Title" />
+
+                <TextView
+                    android:id="@+id/streamUrl"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textAppearance="@style/TextAppearance.NYPlayer.Body2"
+                    android:textSize="@dimen/text_size_small"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    tools:text="https://example.com/stream.m3u8" />
+
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/downloadStreamButton"
+                android:layout_width="@dimen/media_control_size"
+                android:layout_height="@dimen/media_control_size"
+                android:layout_marginStart="@dimen/margin_small"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_download"
+                android:contentDescription="@string/download"
+                android:tint="@color/text_secondary_dark" />
+
+        </LinearLayout>
+        EOF
+        
+    - name: Create player activity layout
+      run: |
+                cat > app/src/main/res/layout/activity_player.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            xmlns:tools="http://schemas.android.com/tools"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/player_background"
+            android:keepScreenOn="true"
+            tools:context=".ui.PlayerActivity">
+
+            <com.google.android.exoplayer2.ui.StyledPlayerView
+                android:id="@+id/playerView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/player_background"
+                app:use_controller="true"
+                app:resize_mode="fit"
+                app:show_buffering="when_playing"
+                app:auto_show="true"
+                app:hide_on_touch="true"
+                app:show_timeout="4000"
+                app:surface_type="texture_view" />
+
+            <LinearLayout
+                android:id="@+id/loadingContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:background="@drawable/loading_background"
+                android:padding="@dimen/padding_large">
+
+                <com.google.android.material.progressindicator.CircularProgressIndicator
+                    android:id="@+id/loadingIndicator"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="center_horizontal"
+                    app:indicatorColor="@color/primary_light"
+                    app:trackColor="@color/progress_secondary"
+                    android:indeterminate="true" />
+
+                <TextView
+                    android:id="@+id/loadingText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="@dimen/margin_medium"
+                    android:text="@string/loading"
+                    android:textColor="@color/text_primary_dark"
+                    android:textSize="@dimen/text_size_medium" />
+
+            </LinearLayout>
+
+        </FrameLayout>
+        EOF
+        
+    - name: Create source files
       run: |
         # Create NYPlayerApplication.kt
         cat > app/src/main/java/com/nyplayer/NYPlayerApplication.kt << 'EOF'
         package com.nyplayer
 
         import android.app.Application
+        import android.app.NotificationChannel
+        import android.app.NotificationManager
+        import android.os.Build
+        import timber.log.Timber
 
         class NYPlayerApplication : Application() {
+            
+            companion object {
+                const val MEDIA_NOTIFICATION_CHANNEL_ID = "media_playback_channel"
+                const val DOWNLOAD_NOTIFICATION_CHANNEL_ID = "download_channel"
+            }
+            
             override fun onCreate() {
                 super.onCreate()
+                
+                if (BuildConfig.DEBUG) {
+                    Timber.plant(Timber.DebugTree())
+                }
+                
+                createNotificationChannels()
+            }
+            
+            private fun createNotificationChannels() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val notificationManager = getSystemService(NotificationManager::class.java)
+                    
+                    // Media playback channel
+                    val mediaChannel = NotificationChannel(
+                        MEDIA_NOTIFICATION_CHANNEL_ID,
+                        getString(R.string.notification_channel_name),
+                        NotificationManager.IMPORTANCE_LOW
+                    ).apply {
+                        description = getString(R.string.notification_channel_description)
+                        setShowBadge(false)
+                    }
+                    
+                    // Download channel
+                    val downloadChannel = NotificationChannel(
+                        DOWNLOAD_NOTIFICATION_CHANNEL_ID,
+                        getString(R.string.download_notification_channel_name),
+                        NotificationManager.IMPORTANCE_LOW
+                    ).apply {
+                        description = getString(R.string.download_notification_channel_description)
+                        setShowBadge(true)
+                    }
+                    
+                    notificationManager.createNotificationChannel(mediaChannel)
+                    notificationManager.createNotificationChannel(downloadChannel)
+                }
             }
         }
         EOF
@@ -657,13 +2192,153 @@ jobs:
         cat > app/src/main/java/com/nyplayer/MainActivity.kt << 'EOF'
         package com.nyplayer
 
+        import android.Manifest
+        import android.content.Intent
+        import android.content.pm.PackageManager
+        import android.os.Build
         import android.os.Bundle
+        import android.view.MenuItem
         import androidx.appcompat.app.AppCompatActivity
+        import androidx.core.app.ActivityCompat
+        import androidx.core.content.ContextCompat
+        import androidx.databinding.DataBindingUtil
+        import androidx.fragment.app.Fragment
+        import androidx.viewpager2.adapter.FragmentStateAdapter
+        import com.google.android.material.tabs.TabLayoutMediator
+        import com.nyplayer.databinding.ActivityMainBinding
+        import com.nyplayer.fragments.HomeFragment
+        import com.nyplayer.fragments.DownloadsFragment
+        import com.nyplayer.fragments.LocalFilesFragment
+        import com.nyplayer.fragments.PlaylistFragment
+        import com.nyplayer.fragments.SettingsFragment
+        import com.nyplayer.ui.DownloadActivity
+        import timber.log.Timber
 
         class MainActivity : AppCompatActivity() {
+            
+            private lateinit var binding: ActivityMainBinding
+            private val fragments = mutableListOf<Fragment>()
+            
+            companion object {
+                private const val PERMISSION_REQUEST_CODE = 1001
+                private val REQUIRED_PERMISSIONS = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    arrayOf(
+                        Manifest.permission.READ_MEDIA_VIDEO,
+                        Manifest.permission.READ_MEDIA_AUDIO,
+                        Manifest.permission.POST_NOTIFICATIONS
+                    )
+                } else {
+                    arrayOf(
+                        Manifest.permission.READ_EXTERNAL_STORAGE,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE
+                    )
+                }
+            }
+            
             override fun onCreate(savedInstanceState: Bundle?) {
                 super.onCreate(savedInstanceState)
-                setContentView(R.layout.activity_main)
+                binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
+                
+                setupToolbar()
+                setupViewPager()
+                setupBottomNavigation()
+                setupFab()
+                
+                checkPermissions()
+            }
+            
+            private fun setupToolbar() {
+                setSupportActionBar(binding.toolbar)
+                binding.toolbar.setOnMenuItemClickListener { menuItem ->
+                    when (menuItem.itemId) {
+                        R.id.action_downloads -> {
+                            startActivity(Intent(this, DownloadActivity::class.java))
+                            true
+                        }
+                        R.id.action_settings -> {
+                            // Navigate to settings
+                            binding.bottomNavigation.selectedItemId = R.id.nav_settings
+                            true
+                        }
+                        R.id.action_about -> {
+                            // Show about dialog
+                            true
+                        }
+                        else -> false
+                    }
+                }
+            }
+            
+            private fun setupViewPager() {
+                fragments.clear()
+                fragments.addAll(listOf(
+                    HomeFragment(),
+                    LocalFilesFragment(),
+                    DownloadsFragment(),
+                    PlaylistFragment(),
+                    SettingsFragment()
+                ))
+                
+                binding.viewPager.adapter = object : FragmentStateAdapter(this) {
+                    override fun getItemCount(): Int = fragments.size
+                    override fun createFragment(position: Int): Fragment = fragments[position]
+                }
+                
+                binding.viewPager.isUserInputEnabled = true
+            }
+            
+            private fun setupBottomNavigation() {
+                binding.bottomNavigation.setOnItemSelectedListener { item ->
+                    val position = when (item.itemId) {
+                        R.id.nav_home -> 0
+                        R.id.nav_local -> 1
+                        R.id.nav_downloads -> 2
+                        R.id.nav_playlist -> 3
+                        R.id.nav_settings -> 4
+                        else -> 0
+                    }
+                    binding.viewPager.currentItem = position
+                    true
+                }
+            }
+            
+            private fun setupFab() {
+                binding.fab.setOnClickListener {
+                    // Quick play action - switch to home tab
+                    binding.viewPager.currentItem = 0
+                }
+            }
+            
+            private fun checkPermissions() {
+                val missingPermissions = REQUIRED_PERMISSIONS.filter {
+                    ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+                }
+                
+                if (missingPermissions.isNotEmpty()) {
+                    ActivityCompat.requestPermissions(
+                        this,
+                        missingPermissions.toTypedArray(),
+                        PERMISSION_REQUEST_CODE
+                    )
+                }
+            }
+            
+            override fun onRequestPermissionsResult(
+                requestCode: Int,
+                permissions: Array<out String>,
+                grantResults: IntArray
+            ) {
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+                
+                if (requestCode == PERMISSION_REQUEST_CODE) {
+                    val deniedPermissions = permissions.filterIndexed { index, _ ->
+                        grantResults[index] != PackageManager.PERMISSION_GRANTED
+                    }
+                    
+                    if (deniedPermissions.isNotEmpty()) {
+                        Timber.w("Denied permissions: ${deniedPermissions.joinToString()}")
+                    }
+                }
             }
         }
         EOF
@@ -672,240 +2347,435 @@ jobs:
         cat > app/src/main/java/com/nyplayer/ui/PlayerActivity.kt << 'EOF'
         package com.nyplayer.ui
 
+        import android.content.Intent
+        import android.net.Uri
         import android.os.Bundle
+        import android.view.View
         import androidx.appcompat.app.AppCompatActivity
+        import androidx.databinding.DataBindingUtil
+        import com.google.android.exoplayer2.ExoPlayer
+        import com.google.android.exoplayer2.MediaItem
+        import com.google.android.exoplayer2.Player
+        import com.google.android.exoplayer2.source.ProgressiveMediaSource
+        import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
         import com.nyplayer.R
+        import com.nyplayer.databinding.ActivityPlayerBinding
+        import timber.log.Timber
 
         class PlayerActivity : AppCompatActivity() {
+            
+            private lateinit var binding: ActivityPlayerBinding
+            private var exoPlayer: ExoPlayer? = null
+            
+            companion object {
+                const val EXTRA_MEDIA_URL = "extra_media_url"
+                const val EXTRA_MEDIA_TITLE = "extra_media_title"
+            }
+            
             override fun onCreate(savedInstanceState: Bundle?) {
                 super.onCreate(savedInstanceState)
-                setContentView(R.layout.activity_player)
+                binding = DataBindingUtil.setContentView(this, R.layout.activity_player)
+                
+                initializePlayer()
+                handleIntent(intent)
+            }
+            
+            private fun initializePlayer() {
+                exoPlayer = ExoPlayer.Builder(this).build()
+                binding.playerView.player = exoPlayer
+                
+                exoPlayer?.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        when (playbackState) {
+                            Player.STATE_BUFFERING -> {
+                                showLoading(true)
+                            }
+                            Player.STATE_READY -> {
+                                showLoading(false)
+                            }
+                            Player.STATE_ENDED -> {
+                                finish()
+                            }
+                        }
+                    }
+                })
+            }
+            
+            private fun handleIntent(intent: Intent?) {
+                val mediaUrl = intent?.getStringExtra(EXTRA_MEDIA_URL)
+                    ?: intent?.data?.toString()
+                
+                if (!mediaUrl.isNullOrEmpty()) {
+                    playMedia(mediaUrl)
+                } else {
+                    finish()
+                }
+            }
+            
+            private fun playMedia(url: String) {
+                try {
+                    val uri = Uri.parse(url)
+                    val mediaItem = MediaItem.fromUri(uri)
+                    
+                    val dataSourceFactory = DefaultHttpDataSource.Factory()
+                        .setUserAgent("NY Player/1.0")
+                        .setConnectTimeoutMs(10000)
+                        .setReadTimeoutMs(10000)
+                        .setAllowCrossProtocolRedirects(true)
+                    
+                    val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
+                        .createMediaSource(mediaItem)
+                    
+                    exoPlayer?.setMediaSource(mediaSource)
+                    exoPlayer?.prepare()
+                    exoPlayer?.play()
+                    
+                } catch (e: Exception) {
+                    Timber.e(e, "Error playing media: $url")
+                    finish()
+                }
+            }
+            
+            private fun showLoading(show: Boolean) {
+                binding.loadingContainer.visibility = if (show) View.VISIBLE else View.GONE
+            }
+            
+            override fun onDestroy() {
+                super.onDestroy()
+                exoPlayer?.release()
+                exoPlayer = null
             }
         }
         EOF
         
-        # Create basic player layout
-        cat > app/src/main/res/layout/activity_player.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@android:color/black">
+        # Create HomeFragment.kt
+        cat > app/src/main/java/com/nyplayer/fragments/HomeFragment.kt << 'EOF'
+        package com.nyplayer.fragments
+
+        import android.content.ClipboardManager
+        import android.content.Context
+        import android.content.Intent
+        import android.os.Bundle
+        import android.view.LayoutInflater
+        import android.view.View
+        import android.view.ViewGroup
+        import android.widget.Toast
+        import androidx.databinding.DataBindingUtil
+        import androidx.fragment.app.Fragment
+        import com.nyplayer.R
+        import com.nyplayer.databinding.FragmentHomeBinding
+        import com.nyplayer.ui.PlayerActivity
+        import timber.log.Timber
+
+        class HomeFragment : Fragment() {
             
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="Player View"
-                android:textColor="@android:color/white"
-                android:textSize="18sp" />
+            private lateinit var binding: FragmentHomeBinding
+            
+            override fun onCreateView(
+                inflater: LayoutInflater,
+                container: ViewGroup?,
+                savedInstanceState: Bundle?
+            ): View {
+                binding = DataBindingUtil.inflate(inflater, R.layout.fragment_home, container, false)
+                return binding.root
+            }
+            
+            override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+                super.onViewCreated(view, savedInstanceState)
                 
-        </FrameLayout>
+                setupButtons()
+            }
+            
+            private fun setupButtons() {
+                binding.playButton.setOnClickListener {
+                    val url = binding.urlInput.text.toString().trim()
+                    if (url.isNotEmpty()) {
+                        playUrl(url)
+                    } else {
+                        Toast.makeText(context, R.string.error_invalid_url, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                
+                binding.downloadButton.setOnClickListener {
+                    val url = binding.urlInput.text.toString().trim()
+                    if (url.isNotEmpty()) {
+                        // Implement download functionality
+                        Toast.makeText(context, "Download feature coming soon!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, R.string.error_invalid_url, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                
+                binding.pasteButton.setOnClickListener {
+                    pasteFromClipboard()
+                }
+                
+                binding.clearButton.setOnClickListener {
+                    binding.urlInput.setText("")
+                }
+                
+                binding.testButton.setOnClickListener {
+                    // Use sample URL for testing
+                    val sampleUrls = resources.getStringArray(R.array.sample_urls)
+                    if (sampleUrls.isNotEmpty()) {
+                        binding.urlInput.setText(sampleUrls[0])
+                    }
+                }
+            }
+            
+            private fun playUrl(url: String) {
+                try {
+                    val intent = Intent(context, PlayerActivity::class.java).apply {
+                        putExtra(PlayerActivity.EXTRA_MEDIA_URL, url)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Timber.e(e, "Error starting player")
+                    Toast.makeText(context, R.string.error_load_failed, Toast.LENGTH_SHORT).show()
+                }
+            }
+            
+            private fun pasteFromClipboard() {
+                val clipboardManager = 
+                    requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                
+                val clipData = clipboardManager.primaryClip
+                if (clipData != null && clipData.itemCount > 0) {
+                    val text = clipData.getItemAt(0).text
+                    if (text != null) {
+                        binding.urlInput.setText(text.toString())
+                    }
+                }
+            }
+        }
+        EOF
+        
+        # Create DownloadsFragment.kt
+        cat > app/src/main/java/com/nyplayer/fragments/DownloadsFragment.kt << 'EOF'
+        package com.nyplayer.fragments
+
+        import android.os.Bundle
+        import android.view.LayoutInflater
+        import android.view.View
+        import android.view.ViewGroup
+        import androidx.databinding.DataBindingUtil
+        import androidx.fragment.app.Fragment
+        import com.nyplayer.R
+        import com.nyplayer.databinding.FragmentDownloadsBinding
+
+        class DownloadsFragment : Fragment() {
+            
+            private lateinit var binding: FragmentDownloadsBinding
+            
+            override fun onCreateView(
+                inflater: LayoutInflater,
+                container: ViewGroup?,
+                savedInstanceState: Bundle?
+            ): View {
+                binding = DataBindingUtil.inflate(inflater, R.layout.fragment_downloads, container, false)
+                return binding.root
+            }
+            
+            override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+                super.onViewCreated(view, savedInstanceState)
+                
+                // Initialize download functionality
+                setupDownloadManager()
+            }
+            
+            private fun setupDownloadManager() {
+                // Implement download management
+            }
+        }
+        EOF
+        
+        # Create other fragment stubs
+        cat > app/src/main/java/com/nyplayer/fragments/LocalFilesFragment.kt << 'EOF'
+        package com.nyplayer.fragments
+
+        import android.os.Bundle
+        import android.view.LayoutInflater
+        import android.view.View
+        import android.view.ViewGroup
+        import androidx.fragment.app.Fragment
+        import com.nyplayer.R
+
+        class LocalFilesFragment : Fragment() {
+            
+            override fun onCreateView(
+                inflater: LayoutInflater,
+                container: ViewGroup?,
+                savedInstanceState: Bundle?
+            ): View {
+                return inflater.inflate(R.layout.fragment_home, container, false)
+            }
+        }
+        EOF
+        
+        cat > app/src/main/java/com/nyplayer/fragments/PlaylistFragment.kt << 'EOF'
+        package com.nyplayer.fragments
+
+        import android.os.Bundle
+        import android.view.LayoutInflater
+        import android.view.View
+        import android.view.ViewGroup
+        import androidx.fragment.app.Fragment
+        import com.nyplayer.R
+
+        class PlaylistFragment : Fragment() {
+            
+            override fun onCreateView(
+                inflater: LayoutInflater,
+                container: ViewGroup?,
+                savedInstanceState: Bundle?
+            ): View {
+                return inflater.inflate(R.layout.fragment_home, container, false)
+            }
+        }
+        EOF
+        
+        cat > app/src/main/java/com/nyplayer/fragments/SettingsFragment.kt << 'EOF'
+        package com.nyplayer.fragments
+
+        import android.os.Bundle
+        import android.view.LayoutInflater
+        import android.view.View
+        import android.view.ViewGroup
+        import androidx.fragment.app.Fragment
+        import com.nyplayer.R
+
+        class SettingsFragment : Fragment() {
+            
+            override fun onCreateView(
+                inflater: LayoutInflater,
+                container: ViewGroup?,
+                savedInstanceState: Bundle?
+            ): View {
+                return inflater.inflate(R.layout.fragment_home, container, false)
+            }
+        }
+        EOF
+        
+        # Create DownloadActivity.kt
+        cat > app/src/main/java/com/nyplayer/ui/DownloadActivity.kt << 'EOF'
+        package com.nyplayer.ui
+
+        import android.os.Bundle
+        import androidx.appcompat.app.AppCompatActivity
+        import androidx.databinding.DataBindingUtil
+        import com.nyplayer.R
+        import com.nyplayer.databinding.ActivityMainBinding
+
+        class DownloadActivity : AppCompatActivity() {
+            
+            private lateinit var binding: ActivityMainBinding
+            
+            override fun onCreate(savedInstanceState: Bundle?) {
+                super.onCreate(savedInstanceState)
+                binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
+                
+                supportActionBar?.setDisplayHomeAsUpEnabled(true)
+                title = "Downloads"
+            }
+            
+            override fun onSupportNavigateUp(): Boolean {
+                onBackPressed()
+                return true
+            }
+        }
         EOF
         
         # Create ProGuard rules
         cat > app/proguard-rules.pro << 'EOF'
         # Add project specific ProGuard rules here.
-        -keep class androidx.** { *; }
-        -keep class com.google.android.material.** { *; }
+        # You can control the set of applied configuration files using the
+        # proguardFiles setting in build.gradle.
+
+        # Keep all ExoPlayer classes
         -keep class com.google.android.exoplayer2.** { *; }
         -dontwarn com.google.android.exoplayer2.**
+
+        # Keep AndroidX classes
+        -keep class androidx.** { *; }
+        -dontwarn androidx.**
+
+        # Keep Material Components
+        -keep class com.google.android.material.** { *; }
+        -dontwarn com.google.android.material.**
+
+        # Keep data binding classes
+        -keep class * extends androidx.databinding.ViewDataBinding { *; }
+        -keep class androidx.databinding.** { *; }
+
+        # Keep OkHttp
+        -keep class okhttp3.** { *; }
+        -keep interface okhttp3.** { *; }
+        -dontwarn okhttp3.**
+
+        # Keep Gson
+        -keep class com.google.gson.** { *; }
+        -keep class * implements com.google.gson.TypeAdapterFactory
+        -keep class * implements com.google.gson.JsonSerializer
+        -keep class * implements com.google.gson.JsonDeserializer
+
+        # Keep Timber
+        -keep class timber.log.** { *; }
+        -dontwarn timber.log.**
+
+        # Keep download library
+        -keep class com.liulishuo.okdownload.** { *; }
+        -dontwarn com.liulishuo.okdownload.**
         EOF
         
-    - name: Make gradlew executable
+    - name: Test gradlew permissions
       run: |
-        # Create gradlew wrapper files
-        cat > gradlew << 'EOF'
-        #!/usr/bin/env sh
-        
-        ##############################################################################
-        ##
-        ##  Gradle start up script for UN*X
-        ##
-        ##############################################################################
-        
-        # Resolve links: $0 may be a link
-        PRG="$0"
-        # Need this for relative symlinks.
-        while [ -h "$PRG" ] ; do
-            ls=`ls -ld "$PRG"`
-            link=`expr "$ls" : '.*-> \(.*\)$'`
-            if expr "$link" : '/.*' > /dev/null; then
-                PRG="$link"
-            else
-                PRG=`dirname "$PRG"`"/$link"
-            fi
-        done
-        SAVED="`pwd`"
-        cd "`dirname \"$PRG\"`/" >/dev/null
-        APP_HOME="`pwd -P`"
-        cd "$SAVED" >/dev/null
-        
-        APP_NAME="Gradle"
-        APP_BASE_NAME=`basename "$0"`
-        
-        # Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
-        DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
-        
-        # Use the maximum available, or set MAX_FD != -1 to use that value.
-        MAX_FD="maximum"
-        
-        warn () {
-            echo "$*"
-        }
-        
-        die () {
-            echo
-            echo "$*"
-            echo
-            exit 1
-        }
-        
-        # OS specific support (must be 'true' or 'false').
-        cygwin=false
-        msys=false
-        darwin=false
-        nonstop=false
-        case "`uname`" in
-          CYGWIN* )
-            cygwin=true
-            ;;
-          Darwin* )
-            darwin=true
-            ;;
-          MINGW* )
-            msys=true
-            ;;
-          NONSTOP* )
-            nonstop=true
-            ;;
-        esac
-        
-        CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
-        
-        # Determine the Java command to use to start the JVM.
-        if [ -n "$JAVA_HOME" ] ; then
-            if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
-                # IBM's JDK on AIX uses strange locations for the executables
-                JAVACMD="$JAVA_HOME/jre/sh/java"
-            else
-                JAVACMD="$JAVA_HOME/bin/java"
-            fi
-            if [ ! -x "$JAVACMD" ] ; then
-                die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
-        
-        Please set the JAVA_HOME variable in your environment to match the
-        location of your Java installation."
-            fi
-        else
-            JAVACMD="java"
-            which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
-        
-        Please set the JAVA_HOME variable in your environment to match the
-        location of your Java installation."
-        fi
-        
-        # Increase the maximum file descriptors if we can.
-        if [ "$cygwin" = "false" -a "$darwin" = "false" -a "$nonstop" = "false" ] ; then
-            MAX_FD_LIMIT=`ulimit -H -n`
-            if [ $? -eq 0 ] ; then
-                if [ "$MAX_FD" = "maximum" -o "$MAX_FD" = "max" ] ; then
-                    MAX_FD="$MAX_FD_LIMIT"
-                fi
-                ulimit -n $MAX_FD
-                if [ $? -ne 0 ] ; then
-                    warn "Could not set maximum file descriptor limit: $MAX_FD"
-                fi
-            else
-                warn "Could not query maximum file descriptor limit: $MAX_FD_LIMIT"
-            fi
-        fi
-        
-        # For Darwin, add options to specify how the application appears in the dock
-        if [ "$darwin" = "true" ]; then
-            GRADLE_OPTS="$GRADLE_OPTS \"-Xdock:name=$APP_NAME\" \"-Xdock:icon=$APP_HOME/media/gradle.icns\""
-        fi
-        
-        # For Cygwin or MSYS, switch paths to Windows format before running java
-        if [ "$cygwin" = "true" -o "$msys" = "true" ] ; then
-            APP_HOME=`cygpath --path --mixed "$APP_HOME"`
-            CLASSPATH=`cygpath --path --mixed "$CLASSPATH"`
-            
-            JAVACMD=`cygpath --unix "$JAVACMD"`
-        
-            # We build the pattern for arguments to be converted via cygpath
-            ROOTDIRSRAW=`find -L / -maxdepth 1 -mindepth 1 -type d 2>/dev/null`
-            SEP=""
-            for dir in $ROOTDIRSRAW ; do
-                ROOTDIRS="$ROOTDIRS$SEP$dir"
-                SEP="|"
-            done
-            OURCYGPATTERN="(^($ROOTDIRS))"
-            # Add a user-defined pattern to the cygpath arguments
-            if [ "$GRADLE_CYGPATTERN" != "" ] ; then
-                OURCYGPATTERN="$OURCYGPATTERN|($GRADLE_CYGPATTERN)"
-            fi
-            # Now convert the arguments - kludge to limit ourselves to /bin/sh
-            i=0
-            for arg in "$@" ; do
-                CHECK=`echo "$arg"|egrep -c "$OURCYGPATTERN" -`
-                CHECK2=`echo "$arg"|egrep -c "^-"`                                 ### Determine if an option
-        
-                if [ $CHECK -ne 0 ] && [ $CHECK2 -eq 0 ] ; then                    ### Added a condition
-                    eval `echo args$i`=`cygpath --path --ignore --mixed "$arg"`
-                else
-                    eval `echo args$i`="\"$arg\""
-                fi
-                i=`expr $i + 1`
-            done
-            case $i in
-                0) set -- ;;
-                1) set -- "$args0" ;;
-                2) set -- "$args0" "$args1" ;;
-                3) set -- "$args0" "$args1" "$args2" ;;
-                4) set -- "$args0" "$args1" "$args2" "$args3" ;;
-                5) set -- "$args0" "$args1" "$args2" "$args3" "$args4" ;;
-                6) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" ;;
-                7) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" ;;
-                8) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" ;;
-                9) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" "$args8" ;;
-            esac
-        fi
-        
-        # Escape application args
-        save () {
-            for i do printf %s\\n "$i" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/' \\\\/" ; done
-            echo " "
-        }
-        APP_ARGS=`save "$@"`
-        
-        # Collect all arguments for the java command, following the shell quoting and substitution rules
-        eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dprop=$APP_ARGS\"" -classpath "\"$CLASSPATH\"" org.gradle.wrapper.GradleWrapperMain "$APP_ARGS"
-        
-        exec "$JAVACMD" "$@"
-        EOF
-        chmod +x gradlew
-        
-    - name: Create gradle wrapper JAR
-      run: |
-        # Download gradle wrapper jar
-        mkdir -p gradle/wrapper
-        curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.4.0/gradle/wrapper/gradle-wrapper.jar
+        ls -la gradlew
+        file gradlew
         
     - name: Build debug APK
-      run: ./gradlew assembleDebug --stacktrace
+      run: ./gradlew assembleDebug --stacktrace --info
       
     - name: Build release APK
-      run: ./gradlew assembleRelease --stacktrace
+      run: ./gradlew assembleRelease --stacktrace --info
       
     - name: Upload debug APK
       uses: actions/upload-artifact@v4
       with:
-        name: NY Player Debug APK
+        name: NY-Player-Debug-APK
         path: app/build/outputs/apk/debug/*.apk
+        retention-days: 30
         
     - name: Upload release APK
       uses: actions/upload-artifact@v4
       with:
-        name: NY Player Release APK
+        name: NY-Player-Release-APK
         path: app/build/outputs/apk/release/*.apk
+        retention-days: 90
+        
+    - name: Create release info
+      run: |
+        echo "# NY Player - Build Information" > build_info.md
+        echo "**Build Date:** $(date)" >> build_info.md
+        echo "**Commit SHA:** $GITHUB_SHA" >> build_info.md
+        echo "**Workflow:** $GITHUB_WORKFLOW" >> build_info.md
+        echo "" >> build_info.md
+        echo "## Features:" >> build_info.md
+        echo "- Stream video/audio from URLs (HTTP/HTTPS/RTSP/HLS/DASH)" >> build_info.md
+        echo "- Download videos and audio files" >> build_info.md
+        echo "- Local file playback" >> build_info.md
+        echo "- ExoPlayer-based media engine" >> build_info.md
+        echo "- Material Design UI" >> build_info.md
+        echo "- Download manager with pause/resume" >> build_info.md
+        echo "- Background playback support" >> build_info.md
+        echo "- Advanced stream options (headers, DRM)" >> build_info.md
+        echo "" >> build_info.md
+        echo "## Download APKs:" >> build_info.md
+        echo "- Debug APK: For development and testing" >> build_info.md
+        echo "- Release APK: Optimized for production use" >> build_info.md
+        
+    - name: Upload build info
+      uses: actions/upload-artifact@v4
+      with:
+        name: Build-Information
+        path: build_info.md
+        retention-days: 30
