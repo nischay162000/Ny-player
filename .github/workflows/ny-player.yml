@@ -1,0 +1,757 @@
+name: Build NY Player Android APK
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
+    - name: Accept Android SDK licenses
+      run: yes | sdkmanager --licenses
+      
+    - name: Install Android SDK components
+    - name: Create launcher background color
+      run: |
+        sdkmanager "platforms;android-34"
+        sdkmanager "build-tools;34.0.0"
+        sdkmanager "platform-tools"
+        
+    - name: Generate project structure
+      run: |
+        mkdir -p app/src/main/java/com/nyplayer
+        mkdir -p app/src/main/res/layout
+        mkdir -p app/src/main/res/values
+        mkdir -p app/src/main/res/mipmap-anydpi-v26
+        mkdir -p gradle/wrapper
+        
+    - name: Create settings.gradle
+      run: |
+        cat > settings.gradle << 'EOF'
+        pluginManagement {
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
+        }
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        rootProject.name = "NY Player"
+        include ':app'
+        EOF
+        
+    - name: Create root build.gradle
+      run: |
+        cat > build.gradle << 'EOF'
+        plugins {
+            id 'com.android.application' version '8.2.0' apply false
+            id 'org.jetbrains.kotlin.android' version '1.9.10' apply false
+        }
+        EOF
+        
+    - name: Create gradle.properties
+      run: |
+        cat > gradle.properties << 'EOF'
+        org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+        android.useAndroidX=true
+        android.enableJetifier=true
+        kotlin.code.style=official
+        android.nonTransitiveRClass=true
+        EOF
+        
+    - name: Create gradle wrapper properties
+      run: |
+        cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+        networkTimeout=10000
+        validateDistributionUrl=true
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists
+        EOF
+        
+    - name: Create app build.gradle
+      run: |
+        cat > app/build.gradle << 'EOF'
+        plugins {
+            id 'com.android.application'
+            id 'org.jetbrains.kotlin.android'
+        }
+
+        android {
+            namespace 'com.nyplayer'
+            compileSdk 34
+
+            defaultConfig {
+                applicationId "com.nyplayer"
+                minSdk 21
+                targetSdk 34
+                versionCode 1
+                versionName "1.0"
+                
+                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+            }
+
+            buildTypes {
+                release {
+                    minifyEnabled true
+                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                }
+            }
+            
+            buildFeatures {
+                viewBinding true
+            }
+            
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_1_8
+                targetCompatibility JavaVersion.VERSION_1_8
+            }
+            
+            kotlinOptions {
+                jvmTarget = '1.8'
+            }
+        }
+
+        dependencies {
+            implementation 'androidx.core:core-ktx:1.12.0'
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+            implementation 'com.google.android.material:material:1.11.0'
+            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+            implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+            implementation 'androidx.activity:activity-ktx:1.8.2'
+            implementation 'androidx.recyclerview:recyclerview:1.3.2'
+            
+            // Complete ExoPlayer suite for all formats and protocols
+            implementation 'com.google.android.exoplayer:exoplayer:2.19.1'
+            implementation 'com.google.android.exoplayer:exoplayer-core:2.19.1'
+            implementation 'com.google.android.exoplayer:exoplayer-ui:2.19.1'
+            implementation 'com.google.android.exoplayer:exoplayer-dash:2.19.1'
+            implementation 'com.google.android.exoplayer:exoplayer-hls:2.19.1'
+            implementation 'com.google.android.exoplayer:exoplayer-smoothstreaming:2.19.1'
+            implementation 'com.google.android.exoplayer:exoplayer-rtsp:2.19.1'
+            implementation 'com.google.android.exoplayer:extension-okhttp:2.19.1'
+            
+            // File picker and permissions
+            implementation 'androidx.documentfile:documentfile:1.0.1'
+            implementation 'androidx.fragment:fragment-ktx:1.6.2'
+            
+            testImplementation 'junit:junit:4.13.2'
+            androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+            androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+        }
+        EOF
+        
+    - name: Create AndroidManifest.xml
+      run: |
+        cat > app/src/main/AndroidManifest.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:tools="http://schemas.android.com/tools">
+
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+            <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+            <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+            <application
+                android:allowBackup="true"
+                android:dataExtractionRules="@xml/data_extraction_rules"
+                android:fullBackupContent="@xml/backup_rules"
+                android:icon="@mipmap/ic_launcher"
+                android:label="@string/app_name"
+                android:theme="@style/Theme.Material3.DayNight"
+                tools:targetApi="31">
+                
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="true"
+                    android:screenOrientation="landscape">
+                    <intent-filter android:priority="1000">
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                    
+                    <intent-filter>
+                        <action android:name="android.intent.action.VIEW" />
+                        <category android:name="android.intent.category.DEFAULT" />
+                        <category android:name="android.intent.category.BROWSABLE" />
+                        <data android:scheme="http" />
+                        <data android:scheme="https" />
+                        <data android:mimeType="video/*" />
+                        <data android:mimeType="audio/*" />
+                    </intent-filter>
+                    
+                    <intent-filter>
+                        <action android:name="android.intent.action.VIEW" />
+                        <category android:name="android.intent.category.DEFAULT" />
+                        <data android:scheme="file" />
+                        <data android:mimeType="video/*" />
+                        <data android:mimeType="audio/*" />
+                    </intent-filter>
+                    
+                    <intent-filter>
+                        <action android:name="android.intent.action.VIEW" />
+                        <category android:name="android.intent.category.DEFAULT" />
+                        <data android:scheme="content" />
+                        <data android:mimeType="video/*" />
+                        <data android:mimeType="audio/*" />
+                    </intent-filter>
+                    
+                    <intent-filter>
+                        <action android:name="android.intent.action.VIEW" />
+                        <category android:name="android.intent.category.DEFAULT" />
+                        <data android:scheme="rtsp" />
+                    </intent-filter>
+                    
+                    <intent-filter>
+                        <action android:name="android.intent.action.VIEW" />
+                        <category android:name="android.intent.category.DEFAULT" />
+                        <data android:pathPattern=".*\\.m3u8" />
+                        <data android:pathPattern=".*\\.mpd" />
+                        <data android:pathPattern=".*\\.mp4" />
+                        <data android:pathPattern=".*\\.mkv" />
+                        <data android:pathPattern=".*\\.webm" />
+                        <data android:pathPattern=".*\\.3gp" />
+                        <data android:pathPattern=".*\\.ts" />
+                        <data android:pathPattern=".*\\.mov" />
+                        <data android:pathPattern=".*\\.mp3" />
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
+        
+    - name: Create activity_main.xml layout
+      run: |
+        cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:app="http://schemas.android.com/apk/res-auto"
+            xmlns:tools="http://schemas.android.com/tools"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:background="@android:color/black"
+            tools:context=".MainActivity">
+
+            <!-- URL Input Section -->
+            <LinearLayout
+                android:id="@+id/inputSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:background="#CC000000"
+                android:visibility="gone">
+                
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Media Stream URL"
+                    app:boxBackgroundColor="#80FFFFFF"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+                    
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/urlInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textUri"
+                        android:textColor="@android:color/black"
+                        android:textColorHint="#666666" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp">
+                    
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/playButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="PLAY"
+                        android:layout_marginEnd="8dp"
+                        style="@style/Widget.MaterialComponents.Button" />
+                    
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/fileButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="BROWSE FILE"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Player View -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <com.google.android.exoplayer2.ui.StyledPlayerView
+                    android:id="@+id/playerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    app:use_controller="true"
+                    app:resize_mode="fit"
+                    app:show_buffering="when_playing"
+                    app:controller_layout_id="@layout/custom_player_controls" />
+
+                <!-- Loading indicator -->
+                <ProgressBar
+                    android:id="@+id/loadingIndicator"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="center"
+                    android:visibility="gone" />
+
+                <!-- Toggle input button -->
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/toggleInputFab"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|end"
+                    android:layout_margin="16dp"
+                    android:src="@drawable/ic_add"
+                    app:tint="@android:color/white" />
+
+                <!-- Credit Text -->
+                <TextView
+                    android:id="@+id/creditText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/credit"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp"
+                    android:padding="8dp"
+                    android:background="#80000000"
+                    android:layout_gravity="bottom|end" />
+
+            </FrameLayout>
+
+        </LinearLayout>
+        EOF
+        
+    - name: Create strings.xml
+      run: |
+        cat > app/src/main/res/values/strings.xml << 'EOF'
+        <resources>
+            <string name="app_name">NY Player</string>
+            <string name="credit">Credit: NY Player</string>
+            <string name="enter_url">Enter video URL</string>
+            <string name="play">PLAY</string>
+            <string name="browse_file">BROWSE FILE</string>
+            <string name="loading">Loading...</string>
+            <string name="error_invalid_url">Please enter a valid URL</string>
+            <string name="error_load_failed">Failed to load media</string>
+            <string name="permission_storage">Storage permissions are required for local files</string>
+        </resources>
+        EOF
+        
+    - name: Create launcher icon
+      run: |
+        cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/ic_launcher_background"/>
+            <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+        </adaptive-icon>
+        EOF
+        
+    - name: Create custom player controls layout
+      run: |
+        cat > app/src/main/res/layout/custom_player_controls.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:tools="http://schemas.android.com/tools"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:background="@drawable/control_background"
+            android:orientation="vertical"
+            android:paddingLeft="12dp"
+            android:paddingTop="4dp"
+            android:paddingRight="12dp"
+            android:paddingBottom="4dp">
+
+            <!-- Top controls -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:paddingBottom="4dp">
+
+                <TextView
+                    android:id="@id/exo_position"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFF"
+                    android:textSize="14sp"
+                    android:includeFontPadding="false"
+                    android:paddingLeft="4dp"
+                    android:paddingRight="4dp"
+                    tools:text="1:23" />
+
+                <View
+                    android:id="@id/exo_progress"
+                    android:layout_width="0dp"
+                    android:layout_height="26dp"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@id/exo_duration"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFF"
+                    android:textSize="14sp"
+                    android:includeFontPadding="false"
+                    android:paddingLeft="4dp"
+                    android:paddingRight="4dp"
+                    tools:text="4:56" />
+
+            </LinearLayout>
+
+            <!-- Bottom controls -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical">
+
+                <ImageButton
+                    android:id="@id/exo_prev"
+                    style="@style/ExoMediaButton.Previous" />
+
+                <ImageButton
+                    android:id="@id/exo_rew"
+                    style="@style/ExoMediaButton.Rewind" />
+
+                <ImageButton
+                    android:id="@id/exo_play_pause"
+                    style="@style/ExoMediaButton.Play" />
+
+                <ImageButton
+                    android:id="@id/exo_ffwd"
+                    style="@style/ExoMediaButton.FastForward" />
+
+                <ImageButton
+                    android:id="@id/exo_next"
+                    style="@style/ExoMediaButton.Next" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <ImageButton
+                    android:id="@+id/exo_repeat_toggle"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/exo_controls_repeat_off"
+                    android:tint="#FFFFFF" />
+
+                <ImageButton
+                    android:id="@+id/exo_subtitle"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/exo_controls_cc_enabled"
+                    android:tint="#FFFFFF" />
+
+                <ImageButton
+                    android:id="@id/exo_fullscreen"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/exo_controls_fullscreen_enter"
+                    android:tint="#FFFFFF" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+        EOF
+        
+    - name: Create control background drawable
+      run: |
+        cat > app/src/main/res/drawable/control_background.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <shape xmlns:android="http://schemas.android.com/apk/res/android">
+            <gradient
+                android:startColor="#E6000000"
+                android:endColor="#4D000000"
+                android:angle="270" />
+        </shape>
+        EOF
+        
+    - name: Create add icon
+      run: |
+        cat > app/src/main/res/drawable/ic_add.xml << 'EOF'
+        <vector xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24">
+          <path
+              android:fillColor="#FFFFFF"
+              android:pathData="M19,13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+        </vector>
+        EOF
+      run: |
+        cat > app/src/main/res/values/ic_launcher_background.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+            <color name="ic_launcher_background">#3F51B5</color>
+        </resources>
+        EOF
+        
+    - name: Create launcher foreground drawable
+      run: |
+        mkdir -p app/src/main/res/drawable
+        cat > app/src/main/res/drawable/ic_launcher_foreground.xml << 'EOF'
+        <vector xmlns:android="http://schemas.android.com/apk/res/android"
+            android:width="108dp"
+            android:height="108dp"
+            android:viewportWidth="108"
+            android:viewportHeight="108">
+          <path
+              android:fillColor="#FFFFFF"
+              android:pathData="M36,54L72,36v36L36,54z"/>
+        </vector>
+        EOF
+        
+    - name: Create XML resource files
+      run: |
+        mkdir -p app/src/main/res/xml
+        cat > app/src/main/res/xml/data_extraction_rules.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <data-extraction-rules>
+            <cloud-backup>
+                <include domain="file" path="."/>
+            </cloud-backup>
+            <device-transfer>
+                <include domain="file" path="."/>
+            </device-transfer>
+        </data-extraction-rules>
+        EOF
+        
+        cat > app/src/main/res/xml/backup_rules.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <full-backup-content>
+        </full-backup-content>
+        EOF
+        
+    - name: Create MainActivity.kt
+      run: |
+        cat > app/src/main/java/com/nyplayer/MainActivity.kt << 'EOF'
+        package com.nyplayer
+
+        import android.net.Uri
+        import android.os.Bundle
+        import android.view.View
+        import android.view.WindowManager
+        import androidx.appcompat.app.AppCompatActivity
+        import com.google.android.exoplayer2.ExoPlayer
+        import com.google.android.exoplayer2.MediaItem
+        import com.google.android.exoplayer2.PlaybackException
+        import com.google.android.exoplayer2.Player
+        import com.google.android.exoplayer2.ui.StyledPlayerView
+        import com.google.android.exoplayer2.util.Log
+        import com.google.android.exoplayer2.util.Util
+
+        class MainActivity : AppCompatActivity() {
+            
+            private var player: ExoPlayer? = null
+            private lateinit var playerView: StyledPlayerView
+            
+            private val sampleVideoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+            
+            override fun onCreate(savedInstanceState: Bundle?) {
+                super.onCreate(savedInstanceState)
+                setContentView(R.layout.activity_main)
+                
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_FULLSCREEN
+                )
+                
+                playerView = findViewById(R.id.playerView)
+            }
+            
+            override fun onStart() {
+                super.onStart()
+                if (Util.SDK_INT > 23) {
+                    initializePlayer()
+                }
+            }
+            
+            override fun onResume() {
+                super.onResume()
+                if (Util.SDK_INT <= 23 || player == null) {
+                    initializePlayer()
+                }
+            }
+            
+            override fun onPause() {
+                super.onPause()
+                if (Util.SDK_INT <= 23) {
+                    releasePlayer()
+                }
+            }
+            
+            override fun onStop() {
+                super.onStop()
+                if (Util.SDK_INT > 23) {
+                    releasePlayer()
+                }
+            }
+            
+            private fun initializePlayer() {
+                if (player == null) {
+                    player = ExoPlayer.Builder(this).build()
+                    playerView.player = player
+                    
+                    player?.addListener(object : Player.Listener {
+                        override fun onPlayerError(error: PlaybackException) {
+                            Log.e("NYPlayer", "Playback error: ${error.message}")
+                        }
+                    })
+                    
+                    val videoUri = getVideoUri()
+                    val mediaItem = MediaItem.fromUri(videoUri)
+                    player?.setMediaItem(mediaItem)
+                    player?.prepare()
+                    player?.playWhenReady = true
+                }
+            }
+            
+            private fun releasePlayer() {
+                player?.let {
+                    it.release()
+                    player = null
+                }
+            }
+            
+            private fun getVideoUri(): Uri {
+                return when {
+                    intent?.data != null -> {
+                        Log.d("NYPlayer", "Playing from intent: ${intent.data}")
+                        intent.data!!
+                    }
+                    intent?.extras?.containsKey("video_url") == true -> {
+                        val url = intent.getStringExtra("video_url")!!
+                        Log.d("NYPlayer", "Playing from extras: $url")
+                        Uri.parse(url)
+                    }
+                    else -> {
+                        Log.d("NYPlayer", "Playing sample video")
+                        Uri.parse(sampleVideoUrl)
+                    }
+                }
+            }
+        }
+        EOF
+        
+    - name: Create proguard-rules.pro
+      run: |
+        cat > app/proguard-rules.pro << 'EOF'
+        -keepattributes *Annotation*
+        -keepclassmembers class * {
+            @android.webkit.JavascriptInterface <methods>;
+        }
+        
+        # ExoPlayer rules
+        -keep class com.google.android.exoplayer2.** { *; }
+        -keep interface com.google.android.exoplayer2.** { *; }
+        -dontwarn com.google.android.exoplayer2.**
+        
+        # Media3 rules (future compatibility)
+        -keep class androidx.media3.** { *; }
+        -keep interface androidx.media3.** { *; }
+        -dontwarn androidx.media3.**
+        
+        # OkHttp rules
+        -dontwarn okhttp3.**
+        -dontwarn okio.**
+        -keep class okhttp3.** { *; }
+        -keep interface okhttp3.** { *; }
+        
+        # Network security rules
+        -keep class org.conscrypt.** { *; }
+        -dontwarn org.conscrypt.**
+        
+        -keepclassmembers class * extends android.app.Activity {
+           public void *(android.view.View);
+        }
+        
+        -keepclassmembers enum * {
+            public static **[] values();
+            public static ** valueOf(java.lang.String);
+        }
+        
+        -keep class * implements android.os.Parcelable {
+          public static final android.os.Parcelable$Creator *;
+        }
+        
+        # Keep native methods
+        -keepclasseswithmembernames class * {
+            native <methods>;
+        }
+        
+        # Material Design rules
+        -keep class com.google.android.material.** { *; }
+        -dontwarn com.google.android.material.**
+        EOF
+        
+    - name: Download Gradle wrapper
+      run: |
+        wget https://services.gradle.org/distributions/gradle-8.4-bin.zip -P gradle/wrapper/
+        unzip gradle/wrapper/gradle-8.4-bin.zip -d gradle/wrapper/
+        chmod +x gradle/wrapper/gradle-8.4/bin/gradle
+        
+        cat > gradlew << 'EOF'
+        #!/bin/sh
+        exec gradle/wrapper/gradle-8.4/bin/gradle "$@"
+        EOF
+        chmod +x gradlew
+        
+    - name: Build APK
+      run: |
+        ./gradlew assembleDebug --stacktrace
+        
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: NY-Player-APK
+        path: app/build/outputs/apk/debug/app-debug.apk
