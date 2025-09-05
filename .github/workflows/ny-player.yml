@@ -1,4 +1,4 @@
-name: Build Android Video Stream Player App
+name: NY PLAYER - Professional Video Streaming App
 
 on:
   push:
@@ -6,35 +6,60 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-app:
+  build:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
+    
     steps:
-    - name: Checkout Repository
+    - name: 📥 Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Set up JDK 17
+    - name: ☕ Setup JDK 17
       uses: actions/setup-java@v4
       with:
-        distribution: 'zulu'
+        distribution: 'temurin'
         java-version: '17'
 
-    - name: Create Android Project Structure
+    - name: 🏗️ Create NY PLAYER Project
       run: |
-        # Create project directories
-        mkdir -p app/src/main/java/com/networkstreamer
-        mkdir -p app/src/main/res/{values,xml,mipmap-hdpi,mipmap-mdpi,mipmap-xhdpi,mipmap-xxhdpi,mipmap-xxxhdpi}
+        # Create directories
+        mkdir -p app/src/main/java/com/nyplayer/videoplayer
+        mkdir -p app/src/main/res/values
+        mkdir -p app/src/main/res/drawable
+        mkdir -p app/src/main/res/mipmap-hdpi
+        mkdir -p app/src/main/res/xml
         
-        # Root build.gradle.kts
-        cat > build.gradle.kts <<'EOF'
-        plugins {
-            id("com.android.application") version "8.1.2" apply false
-            id("org.jetbrains.kotlin.android") version "1.9.10" apply false
+        # Create root build.gradle (Groovy syntax - more compatible)
+        cat > build.gradle <<'EOF'
+        buildscript {
+            ext {
+                compose_version = '1.5.4'
+                kotlin_version = '1.9.10'
+            }
+            repositories {
+                google()
+                mavenCentral()
+            }
+            dependencies {
+                classpath 'com.android.tools.build:gradle:8.1.2'
+                classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+            }
+        }
+
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+
+        task clean(type: Delete) {
+            delete rootProject.buildDir
         }
         EOF
         
-        # settings.gradle.kts
-        cat > settings.gradle.kts <<'EOF'
+        # Create settings.gradle
+        cat > settings.gradle <<'EOF'
         pluginManagement {
             repositories {
                 google()
@@ -49,71 +74,118 @@ jobs:
                 mavenCentral()
             }
         }
-        rootProject.name = "NetworkStreamPlayer"
-        include(":app")
+        rootProject.name = "NY PLAYER"
+        include ':app'
         EOF
         
-        # app/build.gradle.kts
-        cat > app/build.gradle.kts <<'EOF'
+        # Create app/build.gradle with all features
+        cat > app/build.gradle <<'EOF'
         plugins {
-            id("com.android.application")
-            id("org.jetbrains.kotlin.android")
+            id 'com.android.application'
+            id 'org.jetbrains.kotlin.android'
         }
-        
+
         android {
-            namespace = "com.networkstreamer"
-            compileSdk = 34
-            
+            namespace 'com.nyplayer.videoplayer'
+            compileSdk 34
+
             defaultConfig {
-                applicationId = "com.networkstreamer"
-                minSdk = 21
-                targetSdk = 34
-                versionCode = 1
-                versionName = "1.0"
+                applicationId "com.nyplayer.videoplayer"
+                minSdk 21
+                targetSdk 34
+                versionCode 1
+                versionName "2.0.0"
+                
+                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+                vectorDrawables.useSupportLibrary = true
             }
-            
+
             buildTypes {
                 release {
-                    isMinifyEnabled = false
+                    minifyEnabled false
+                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                }
+                debug {
+                    applicationIdSuffix ".debug"
+                    debuggable true
                 }
             }
             
             compileOptions {
-                sourceCompatibility = JavaVersion.VERSION_1_8
-                targetCompatibility = JavaVersion.VERSION_1_8
+                sourceCompatibility JavaVersion.VERSION_1_8
+                targetCompatibility JavaVersion.VERSION_1_8
             }
             
             kotlinOptions {
-                jvmTarget = "1.8"
+                jvmTarget = '1.8'
             }
             
             buildFeatures {
-                compose = true
+                compose true
             }
             
             composeOptions {
-                kotlinCompilerExtensionVersion = "1.5.4"
+                kotlinCompilerExtensionVersion = compose_version
+            }
+            
+            packagingOptions {
+                resources {
+                    excludes += '/META-INF/{AL2.0,LGPL2.1}'
+                }
             }
         }
-        
+
         dependencies {
-            implementation("androidx.core:core-ktx:1.12.0")
-            implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-            implementation("androidx.activity:activity-compose:1.8.2")
-            implementation("androidx.compose.ui:ui:1.5.4")
-            implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
-            implementation("androidx.compose.material3:material3:1.1.2")
-            implementation("androidx.compose.material:material-icons-extended:1.5.4")
-            implementation("androidx.navigation:navigation-compose:2.7.4")
+            // Core Android
+            implementation 'androidx.core:core-ktx:1.12.0'
+            implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+            implementation 'androidx.activity:activity-compose:1.8.2'
             
-            // Media3 ExoPlayer
-            implementation("androidx.media3:media3-exoplayer:1.2.0")
-            implementation("androidx.media3:media3-ui:1.2.0")
-            implementation("androidx.media3:media3-common:1.2.0")
+            // Compose BOM
+            implementation platform('androidx.compose:compose-bom:2023.10.01')
+            implementation 'androidx.compose.ui:ui'
+            implementation 'androidx.compose.ui:ui-graphics'
+            implementation 'androidx.compose.ui:ui-tooling-preview'
+            implementation 'androidx.compose.material3:material3'
+            implementation 'androidx.compose.material:material-icons-extended'
+            implementation 'androidx.navigation:navigation-compose:2.7.5'
+            implementation 'androidx.compose.animation:animation'
+            implementation 'androidx.compose.animation:animation-graphics'
+            
+            // ExoPlayer for video streaming
+            implementation 'androidx.media3:media3-exoplayer:1.2.0'
+            implementation 'androidx.media3:media3-ui:1.2.0'
+            implementation 'androidx.media3:media3-common:1.2.0'
+            implementation 'androidx.media3:media3-session:1.2.0'
+            
+            // Networking
+            implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+            implementation 'com.squareup.retrofit2:retrofit:2.9.0'
+            
+            // Image loading
+            implementation 'io.coil-kt:coil-compose:2.5.0'
+            
+            // Coroutines
+            implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+            
+            // WorkManager for downloads
+            implementation 'androidx.work:work-runtime-ktx:2.9.0'
+            
+            // DataStore for preferences
+            implementation 'androidx.datastore:datastore-preferences:1.0.0'
+            
+            // Testing
+            testImplementation 'junit:junit:4.13.2'
+            androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+            androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+            androidTestImplementation platform('androidx.compose:compose-bom:2023.10.01')
+            androidTestImplementation 'androidx.compose.ui:ui-test-junit4'
+            debugImplementation 'androidx.compose.ui:ui-tooling'
+            debugImplementation 'androidx.compose.ui:ui-test-manifest'
         }
         EOF
         
-        # gradle.properties
+        # Create gradle.properties
         cat > gradle.properties <<'EOF'
         org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
         android.useAndroidX=true
@@ -122,35 +194,74 @@ jobs:
         android.nonTransitiveRClass=true
         EOF
 
-    - name: Setup Gradle Wrapper
+    - name: 🔧 Setup Gradle Wrapper (Correct Version)
       run: |
-        # Use Gradle wrapper initialization
-        gradle wrapper --gradle-version 8.4
+        # Use Gradle 8.4 (compatible with Android Gradle Plugin 8.1.2)
+        curl -L https://services.gradle.org/distributions/gradle-8.4-bin.zip -o gradle.zip
+        unzip -q gradle.zip
+        mkdir -p gradle/wrapper
+        cp gradle-8.4/lib/gradle-wrapper.jar gradle/wrapper/
+        
+        # Create gradle wrapper properties with correct version
+        cat > gradle/wrapper/gradle-wrapper.properties <<'EOF'
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+        networkTimeout=10000
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists
+        EOF
+        
+        # Create gradlew script
+        cat > gradlew <<'EOF'
+        #!/bin/sh
+        DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+        APP_NAME="Gradle"
+        APP_BASE_NAME=`basename "$0"`
+        GRADLE_USER_HOME=${GRADLE_USER_HOME:-$HOME/.gradle}
+        
+        case "`uname`" in
+          CYGWIN* | MINGW* )
+            APP_HOME="`pwd -P`"
+            ;;
+          * )
+            APP_HOME="`pwd -P`"
+            ;;
+        esac
+        
+        CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+        exec java $DEFAULT_JVM_OPTS $JAVA_OPTS -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain "$@"
+        EOF
+        
         chmod +x gradlew
 
-    - name: Create Android Resources
+    - name: 📱 Create Android Manifest and Resources
       run: |
         # AndroidManifest.xml
         cat > app/src/main/AndroidManifest.xml <<'EOF'
         <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:tools="http://schemas.android.com/tools">
+
             <uses-permission android:name="android.permission.INTERNET" />
             <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
             <uses-permission android:name="android.permission.WAKE_LOCK" />
-            
+            <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
             <application
                 android:allowBackup="true"
                 android:icon="@mipmap/ic_launcher"
                 android:label="@string/app_name"
                 android:theme="@android:style/Theme.Material.DayNight.NoActionBar"
-                android:usesCleartextTraffic="true">
-                
+                android:usesCleartextTraffic="true"
+                tools:targetApi="31">
+
                 <activity
                     android:name=".MainActivity"
                     android:exported="true"
                     android:supportsPictureInPicture="true"
-                    android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation">
+                    android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation"
+                    android:theme="@android:style/Theme.Material.DayNight.NoActionBar">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
                         <category android:name="android.intent.category.LAUNCHER" />
@@ -164,51 +275,67 @@ jobs:
         cat > app/src/main/res/values/strings.xml <<'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <resources>
-            <string name="app_name">Network Stream Player</string>
+            <string name="app_name">NY PLAYER</string>
+            <string name="media_stream_url">Media Stream URL</string>
+            <string name="cookie_value">Cookie Value</string>
+            <string name="referer_value">Referer Value</string>
+            <string name="origin_value">Origin Value</string>
+            <string name="drm_license_url">DRM License URL</string>
+            <string name="play">Play</string>
+            <string name="pause">Pause</string>
+            <string name="loading">Loading...</string>
         </resources>
         EOF
         
-        # Simple launcher icon (XML vector drawable)
-        cat > app/src/main/res/mipmap-hdpi/ic_launcher.xml <<'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-            <background android:drawable="@color/ic_launcher_background"/>
-            <foreground android:drawable="@drawable/ic_launcher_foreground"/>
-        </adaptive-icon>
-        EOF
-        
-        # Create a basic colors.xml
+        # colors.xml
         cat > app/src/main/res/values/colors.xml <<'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <resources>
-            <color name="ic_launcher_background">#3DDC84</color>
+            <color name="purple_200">#FFBB86FC</color>
+            <color name="purple_500">#FF6200EE</color>
+            <color name="purple_700">#FF3700B3</color>
+            <color name="teal_200">#FF03DAC5</color>
+            <color name="teal_700">#FF018786</color>
+            <color name="black">#FF000000</color>
+            <color name="white">#FFFFFFFF</color>
+            <color name="ny_primary">#FF1976D2</color>
+            <color name="ny_secondary">#FF42A5F5</color>
         </resources>
         EOF
         
-        # Create a basic drawable for launcher
-        mkdir -p app/src/main/res/drawable
-        cat > app/src/main/res/drawable/ic_launcher_foreground.xml <<'EOF'
+        # Simple launcher icon (XML drawable)
+        cat > app/src/main/res/mipmap-hdpi/ic_launcher.xml <<'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/ny_primary"/>
+            <foreground android:drawable="@drawable/ic_play_arrow"/>
+        </adaptive-icon>
+        EOF
+        
+        # Play icon drawable
+        cat > app/src/main/res/drawable/ic_play_arrow.xml <<'EOF'
         <vector xmlns:android="http://schemas.android.com/apk/res/android"
-            android:width="108dp"
-            android:height="108dp"
-            android:viewportWidth="108"
-            android:viewportHeight="108">
+            android:width="24dp"
+            android:height="24dp"
+            android:viewportWidth="24"
+            android:viewportHeight="24"
+            android:tint="?attr/colorOnPrimary">
             <path
-                android:fillColor="#26A69A"
-                android:pathData="M44,42L64,42L54,58Z"/>
-            <path
-                android:fillColor="#26A69A" 
-                android:pathData="M40,38m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0"/>
+                android:fillColor="@android:color/white"
+                android:pathData="M8,5v14l11,-7z"/>
         </vector>
         EOF
 
-    - name: Create MainActivity.kt
+    - name: 🎨 Create Complete NY PLAYER MainActivity with Advanced Features
       run: |
-        cat > app/src/main/java/com/networkstreamer/MainActivity.kt <<'EOF'
-        package com.networkstreamer
-        
+        cat > app/src/main/java/com/nyplayer/videoplayer/MainActivity.kt <<'EOF'
+        package com.nyplayer.videoplayer
+
         import android.app.PictureInPictureParams
+        import android.content.Context
+        import android.content.pm.PackageManager
         import android.content.res.Configuration
+        import android.net.Uri
         import android.os.Build
         import android.os.Bundle
         import android.util.Rational
@@ -216,12 +343,14 @@ jobs:
         import android.widget.FrameLayout
         import androidx.activity.ComponentActivity
         import androidx.activity.compose.setContent
+        import androidx.annotation.RequiresApi
         import androidx.compose.animation.*
         import androidx.compose.animation.core.*
         import androidx.compose.foundation.*
         import androidx.compose.foundation.layout.*
         import androidx.compose.foundation.lazy.LazyColumn
         import androidx.compose.foundation.lazy.items
+        import androidx.compose.foundation.shape.CircleShape
         import androidx.compose.foundation.shape.RoundedCornerShape
         import androidx.compose.foundation.text.KeyboardOptions
         import androidx.compose.material.icons.Icons
@@ -230,35 +359,59 @@ jobs:
         import androidx.compose.runtime.*
         import androidx.compose.ui.Alignment
         import androidx.compose.ui.Modifier
+        import androidx.compose.ui.draw.clip
         import androidx.compose.ui.draw.scale
+        import androidx.compose.ui.graphics.Brush
         import androidx.compose.ui.graphics.Color
         import androidx.compose.ui.graphics.graphicsLayer
+        import androidx.compose.ui.layout.ContentScale
         import androidx.compose.ui.platform.LocalContext
         import androidx.compose.ui.text.font.FontWeight
         import androidx.compose.ui.text.input.KeyboardType
+        import androidx.compose.ui.text.style.TextAlign
         import androidx.compose.ui.text.style.TextOverflow
         import androidx.compose.ui.unit.dp
         import androidx.compose.ui.unit.sp
         import androidx.compose.ui.viewinterop.AndroidView
+        import androidx.datastore.core.DataStore
+        import androidx.datastore.preferences.core.Preferences
+        import androidx.datastore.preferences.core.edit
+        import androidx.datastore.preferences.core.stringPreferencesKey
+        import androidx.datastore.preferences.preferencesDataStore
+        import androidx.lifecycle.ViewModel
+        import androidx.lifecycle.viewmodel.compose.viewModel
         import androidx.media3.common.MediaItem
+        import androidx.media3.common.PlaybackException
+        import androidx.media3.common.Player
         import androidx.media3.exoplayer.ExoPlayer
         import androidx.media3.ui.PlayerView
         import androidx.navigation.NavHostController
         import androidx.navigation.compose.*
+        import androidx.work.*
+        import coil.compose.AsyncImage
+        import coil.request.ImageRequest
         import kotlinx.coroutines.delay
-        
+        import kotlinx.coroutines.flow.Flow
+        import kotlinx.coroutines.flow.map
+        import kotlinx.coroutines.launch
+        import java.util.concurrent.TimeUnit
+
+        // DataStore for preferences
+        val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "ny_player_settings")
+
         class MainActivity : ComponentActivity() {
-            
+            private var exoPlayer: ExoPlayer? = null
+
             override fun onCreate(savedInstanceState: Bundle?) {
                 super.onCreate(savedInstanceState)
                 
                 setContent {
-                    NetworkStreamPlayerTheme {
-                        NetworkStreamPlayerApp(this@MainActivity)
+                    NYPlayerTheme {
+                        NYPlayerApp(this@MainActivity)
                     }
                 }
             }
-            
+
             fun enterPictureInPictureMode() {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     val params = PictureInPictureParams.Builder()
@@ -267,32 +420,166 @@ jobs:
                     enterPictureInPictureMode(params)
                 }
             }
+
+            override fun onPictureInPictureModeChanged(
+                isInPictureInPictureMode: Boolean,
+                newConfig: Configuration
+            ) {
+                super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+                // Handle PiP mode changes
+            }
+
+            override fun onDestroy() {
+                super.onDestroy()
+                exoPlayer?.release()
+            }
         }
-        
+
+        // Player ViewModel with advanced state management
+        class PlayerViewModel : ViewModel() {
+            private var _currentUrl = mutableStateOf("")
+            val currentUrl: State<String> = _currentUrl
+
+            private var _cookieValue = mutableStateOf("")
+            val cookieValue: State<String> = _cookieValue
+
+            private var _refererValue = mutableStateOf("")
+            val refererValue: State<String> = _refererValue
+
+            private var _originValue = mutableStateOf("")
+            val originValue: State<String> = _originValue
+
+            private var _drmLicenseUrl = mutableStateOf("")
+            val drmLicenseUrl: State<String> = _drmLicenseUrl
+
+            private var _isPlaying = mutableStateOf(false)
+            val isPlaying: State<Boolean> = _isPlaying
+
+            private var _isLoading = mutableStateOf(false)
+            val isLoading: State<Boolean> = _isLoading
+
+            private var _playlist = mutableStateListOf<StreamItem>()
+            val playlist: List<StreamItem> = _playlist
+
+            private var _downloadProgress = mutableStateOf(0f)
+            val downloadProgress: State<Float> = _downloadProgress
+
+            fun setCurrentUrl(url: String) {
+                _currentUrl.value = url
+            }
+
+            fun setCookieValue(value: String) {
+                _cookieValue.value = value
+            }
+
+            fun setRefererValue(value: String) {
+                _refererValue.value = value
+            }
+
+            fun setOriginValue(value: String) {
+                _originValue.value = value
+            }
+
+            fun setDrmLicenseUrl(value: String) {
+                _drmLicenseUrl.value = value
+            }
+
+            fun setPlaying(playing: Boolean) {
+                _isPlaying.value = playing
+            }
+
+            fun setLoading(loading: Boolean) {
+                _isLoading.value = loading
+            }
+
+            fun addToPlaylist(item: StreamItem) {
+                if (!_playlist.contains(item)) {
+                    _playlist.add(item)
+                }
+            }
+
+            fun removeFromPlaylist(item: StreamItem) {
+                _playlist.remove(item)
+            }
+
+            fun setDownloadProgress(progress: Float) {
+                _downloadProgress.value = progress
+            }
+        }
+
+        // Data class for stream items
+        data class StreamItem(
+            val title: String,
+            val url: String,
+            val thumbnail: String? = null,
+            val duration: String? = null
+        )
+
+        // Download Worker for background downloads
+        class DownloadWorker(context: Context, params: WorkerParameters) : 
+            CoroutineWorker(context, params) {
+
+            override suspend fun doWork(): Result {
+                val url = inputData.getString("url") ?: return Result.failure()
+                val fileName = inputData.getString("fileName") ?: "video.mp4"
+
+                return try {
+                    // Simulate download progress
+                    for (i in 0..100 step 5) {
+                        setProgress(workDataOf("progress" to i))
+                        delay(100) // Simulate download time
+                    }
+                    Result.success(workDataOf("downloaded_file" to fileName))
+                } catch (e: Exception) {
+                    Result.failure()
+                }
+            }
+        }
+
+        // Advanced Theme with Material 3 Design
         @Composable
-        fun NetworkStreamPlayerTheme(content: @Composable () -> Unit) {
+        fun NYPlayerTheme(content: @Composable () -> Unit) {
+            val nyPlayerColors = darkColorScheme(
+                primary = Color(0xFF1976D2),
+                secondary = Color(0xFF42A5F5),
+                tertiary = Color(0xFF03DAC5),
+                background = Color(0xFF121212),
+                surface = Color(0xFF1E1E1E),
+                onPrimary = Color.White,
+                onSecondary = Color.White,
+                onBackground = Color(0xFFE1E1E1),
+                onSurface = Color(0xFFE1E1E1)
+            )
+
             MaterialTheme(
-                colorScheme = darkColorScheme(
-                    primary = Color(0xFF6750A4),
-                    secondary = Color(0xFF625B71),
-                    background = Color(0xFF1C1B1F),
-                    surface = Color(0xFF1C1B1F),
-                    onPrimary = Color.White,
-                    onSecondary = Color.White,
-                    onBackground = Color(0xFFE6E1E5),
-                    onSurface = Color(0xFFE6E1E5)
+                colorScheme = nyPlayerColors,
+                typography = Typography(
+                    headlineLarge = androidx.compose.ui.text.TextStyle(
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    headlineMedium = androidx.compose.ui.text.TextStyle(
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    bodyLarge = androidx.compose.ui.text.TextStyle(
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Normal
+                    )
                 ),
                 content = content
             )
         }
-        
+
+        // Main App Composable with Navigation
         @Composable
-        fun NetworkStreamPlayerApp(activity: MainActivity) {
+        fun NYPlayerApp(activity: MainActivity) {
             val navController = rememberNavController()
+            val viewModel: PlayerViewModel = viewModel()
             var showSplash by remember { mutableStateOf(true) }
-            
+
             if (showSplash) {
-                SplashScreen {
+                NYPlayerSplashScreen {
                     showSplash = false
                 }
             } else {
@@ -301,362 +588,887 @@ jobs:
                     startDestination = "home"
                 ) {
                     composable("home") {
-                        HomeScreen { url ->
-                            navController.navigate("player/$url")
-                        }
+                        HomeScreen(
+                            viewModel = viewModel,
+                            onPlayVideo = { url ->
+                                viewModel.setCurrentUrl(url)
+                                navController.navigate("player")
+                            }
+                        )
                     }
-                    composable("player/{url}") { backStackEntry ->
-                        val url = backStackEntry.arguments?.getString("url") ?: ""
+                    composable("player") {
                         PlayerScreen(
-                            url = java.net.URLDecoder.decode(url, "UTF-8"),
+                            viewModel = viewModel,
                             onBack = { navController.popBackStack() },
                             activity = activity
                         )
                     }
+                    composable("playlist") {
+                        PlaylistScreen(
+                            viewModel = viewModel,
+                            onPlayItem = { url ->
+                                viewModel.setCurrentUrl(url)
+                                navController.navigate("player")
+                            }
+                        )
+                    }
+                    composable("downloads") {
+                        DownloadsScreen(viewModel = viewModel)
+                    }
+                    composable("settings") {
+                        SettingsScreen(viewModel = viewModel)
+                    }
                 }
             }
         }
-        
+
+        // Advanced Splash Screen with Custom Logo Animation
         @Composable
-        fun SplashScreen(onComplete: () -> Unit) {
+        fun NYPlayerSplashScreen(onComplete: () -> Unit) {
             var startAnimation by remember { mutableStateOf(false) }
             
-            val scale by animateFloatAsState(
+            val scaleAnimation by animateFloatAsState(
                 targetValue = if (startAnimation) 1.0f else 0.3f,
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessLow
                 ),
-                label = "scale"
+                label = "scale_animation"
             )
             
+            val alphaAnimation by animateFloatAsState(
+                targetValue = if (startAnimation) 1.0f else 0.0f,
+                animationSpec = tween(1200, easing = FastOutSlowInEasing),
+                label = "alpha_animation"
+            )
+            
+            val rotationAnimation by animateFloatAsState(
+                targetValue = if (startAnimation) 360f else 0f,
+                animationSpec = tween(1500, easing = LinearEasing),
+                label = "rotation_animation"
+            )
+
             LaunchedEffect(Unit) {
                 startAnimation = true
-                delay(1500)
+                delay(2000)
                 onComplete()
             }
-            
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF1C1B1F)),
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF1976D2),
+                                Color(0xFF42A5F5),
+                                Color(0xFF64B5F6)
+                            )
+                        )
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .scale(scale)
-                        .graphicsLayer(alpha = if (startAnimation) 1f else 0f)
+                        .scale(scaleAnimation)
+                        .graphicsLayer(
+                            alpha = alphaAnimation,
+                            rotationZ = rotationAnimation * 0.1f
+                        )
                 ) {
-                    Icon(
-                        Icons.Default.PlayCircle,
-                        contentDescription = "Logo",
-                        modifier = Modifier.size(120.dp),
-                        tint = Color(0xFF6750A4)
+                    // Custom NY Player Logo
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("https://graph.org/file/3f4620a46dcbb69d218b0-13e5a8d9424946a373.jpg")
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "NY Player Logo",
+                        modifier = Modifier
+                            .size(120.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.1f))
+                            .padding(16.dp),
+                        contentScale = ContentScale.Fit
                     )
                     
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
                     
                     Text(
-                        text = "Network Stream Player",
-                        fontSize = 24.sp,
+                        text = "NY PLAYER",
+                        fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = Color.White,
+                        textAlign = TextAlign.Center
                     )
                     
                     Spacer(modifier = Modifier.height(8.dp))
                     
                     Text(
-                        text = "Advanced Video Streaming",
-                        fontSize = 14.sp,
-                        color = Color.White.copy(alpha = 0.7f)
+                        text = "Professional Video Streaming",
+                        fontSize = 16.sp,
+                        color = Color.White.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Center
+                    )
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    // Animated loading indicator
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(40.dp)
                     )
                 }
             }
         }
-        
+
+        // Advanced Home Screen matching your screenshot
         @OptIn(ExperimentalMaterial3Api::class)
         @Composable
-        fun HomeScreen(onPlayVideo: (String) -> Unit) {
+        fun HomeScreen(
+            viewModel: PlayerViewModel,
+            onPlayVideo: (String) -> Unit
+        ) {
             var selectedTab by remember { mutableIntStateOf(0) }
-            var urlInput by remember { mutableStateOf("") }
-            var cookieInput by remember { mutableStateOf("") }
-            var refererInput by remember { mutableStateOf("") }
-            var originInput by remember { mutableStateOf("") }
-            var drmLicenseInput by remember { mutableStateOf("") }
-            
-            val sampleUrls = listOf(
-                "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-                "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4",
-                "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4"
-            )
-            
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+
             Column(modifier = Modifier.fillMaxSize()) {
-                // Top App Bar
+                // Top App Bar with NY PLAYER branding
                 TopAppBar(
                     title = { 
-                        Text(
-                            "Network Stream Player",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        ) 
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AsyncImage(
+                                model = "https://graph.org/file/3f4620a46dcbb69d218b0-13e5a8d9424946a373.jpg",
+                                contentDescription = "NY Player Logo",
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                "NY PLAYER",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color(0xFF6750A4)
+                        containerColor = Color(0xFF1976D2)
                     )
                 )
                 
-                // Tab Row  
-                TabRow(selectedTabIndex = selectedTab) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { selectedTab = 0 },
-                        text = { Text("Home") },
-                        icon = { Icon(Icons.Default.Home, contentDescription = null) }
+                // Tab Row
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = Color(0xFF1976D2),
+                    contentColor = Color.White
+                ) {
+                    val tabs = listOf(
+                        "Home" to Icons.Default.Home,
+                        "Local" to Icons.Default.Folder,
+                        "Sample Content" to Icons.Default.VideoLibrary,
+                        "Playlist" to Icons.Default.PlaylistPlay,
+                        "Settings" to Icons.Default.Settings
                     )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { selectedTab = 1 },
-                        text = { Text("Local") },
-                        icon = { Icon(Icons.Default.Folder, contentDescription = null) }
-                    )
-                    Tab(
-                        selected = selectedTab == 2,
-                        onClick = { selectedTab = 2 },
-                        text = { Text("Sample Content") },
-                        icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) }
-                    )
-                    Tab(
-                        selected = selectedTab == 3,
-                        onClick = { selectedTab = 3 },
-                        text = { Text("Playlist") },
-                        icon = { Icon(Icons.Default.PlaylistPlay, contentDescription = null) }
-                    )
-                    Tab(
-                        selected = selectedTab == 4,
-                        onClick = { selectedTab = 4 },
-                        text = { Text("Settings") },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = null) }
-                    )
+                    
+                    tabs.forEachIndexed { index, (title, icon) ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = { Text(title) },
+                            icon = { Icon(icon, contentDescription = null) }
+                        )
+                    }
                 }
                 
-                // Content based on selected tab
+                // Tab Content
                 when (selectedTab) {
                     0 -> {
-                        // Home tab - URL input form (matching your screenshot)
+                        // Home tab - Main streaming form (matching your screenshot)
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             item {
-                                OutlinedTextField(
-                                    value = urlInput,
-                                    onValueChange = { urlInput = it },
-                                    label = { Text("Media Stream URL") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
-                                )
-                            }
-                            
-                            item {
-                                OutlinedTextField(
-                                    value = cookieInput,
-                                    onValueChange = { cookieInput = it },
-                                    label = { Text("Cookie Value") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            
-                            item {
-                                OutlinedTextField(
-                                    value = refererInput,
-                                    onValueChange = { refererInput = it },
-                                    label = { Text("Referer Value") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            
-                            item {
-                                OutlinedTextField(
-                                    value = originInput,
-                                    onValueChange = { originInput = it },
-                                    label = { Text("Origin Value") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            
-                            item {
-                                OutlinedTextField(
-                                    value = drmLicenseInput,
-                                    onValueChange = { drmLicenseInput = it },
-                                    label = { Text("DRM License URL") },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                            
-                            item {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    // UserAgent dropdown placeholder
-                                    OutlinedTextField(
-                                        value = "Default",
-                                        onValueChange = { },
-                                        label = { Text("UserAgent") },
-                                        modifier = Modifier.weight(1f),
-                                        enabled = false
-                                    )
-                                    
-                                    // DrmScheme dropdown placeholder  
-                                    OutlinedTextField(
-                                        value = "widevine",
-                                        onValueChange = { },
-                                        label = { Text("DrmScheme") },
-                                        modifier = Modifier.weight(1f),
-                                        enabled = false
-                                    )
-                                }
-                            }
-                            
-                            item {
-                                Spacer(modifier = Modifier.height(16.dp))
-                                
-                                // Play button matching your screenshot
-                                Box(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.BottomEnd
-                                ) {
-                                    FloatingActionButton(
-                                        onClick = { 
-                                            if (urlInput.isNotBlank()) {
-                                                onPlayVideo(java.net.URLEncoder.encode(urlInput, "UTF-8"))
-                                            }
-                                        },
-                                        containerColor = Color(0xFF6750A4)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.PlayArrow,
-                                            contentDescription = "Play",
-                                            tint = Color.White
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    2 -> {
-                        // Sample content
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(sampleUrls) { url ->
                                 Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { onPlayVideo(java.net.URLEncoder.encode(url, "UTF-8")) },
-                                    elevation = CardDefaults.cardElevation(4.dp)
+                                    modifier = Modifier.fillMaxWidth(),
+                                    elevation = CardDefaults.cardElevation(8.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = Color(0xFF1E1E1E)
+                                    )
                                 ) {
-                                    Row(
+                                    Column(
                                         modifier = Modifier.padding(16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
-                                        Icon(
-                                            Icons.Default.PlayCircle,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(40.dp),
-                                            tint = Color(0xFF6750A4)
+                                        // Media Stream URL field
+                                        OutlinedTextField(
+                                            value = viewModel.currentUrl.value,
+                                            onValueChange = { viewModel.setCurrentUrl(it) },
+                                            label = { Text("Media Stream URL") },
+                                            placeholder = { Text("https://example.com/video.m3u8") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = Color(0xFF42A5F5),
+                                                unfocusedBorderColor = Color.Gray
+                                            )
                                         )
                                         
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = url.substringAfterLast("/"),
-                                                fontWeight = FontWeight.Medium,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
+                                        // Cookie Value field
+                                        OutlinedTextField(
+                                            value = viewModel.cookieValue.value,
+                                            onValueChange = { viewModel.setCookieValue(it) },
+                                            label = { Text("Cookie Value") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = Color(0xFF42A5F5),
+                                                unfocusedBorderColor = Color.Gray
                                             )
-                                            Text(
-                                                text = "Sample video content",
-                                                fontSize = 12.sp,
-                                                color = Color.Gray
+                                        )
+                                        
+                                        // Referer Value field
+                                        OutlinedTextField(
+                                            value = viewModel.refererValue.value,
+                                            onValueChange = { viewModel.setRefererValue(it) },
+                                            label = { Text("Referer Value") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = Color(0xFF42A5F5),
+                                                unfocusedBorderColor = Color.Gray
+                                            )
+                                        )
+                                        
+                                        // Origin Value field
+                                        OutlinedTextField(
+                                            value = viewModel.originValue.value,
+                                            onValueChange = { viewModel.setOriginValue(it) },
+                                            label = { Text("Origin Value") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = Color(0xFF42A5F5),
+                                                unfocusedBorderColor = Color.Gray
+                                            )
+                                        )
+                                        
+                                        // DRM License URL field
+                                        OutlinedTextField(
+                                            value = viewModel.drmLicenseUrl.value,
+                                            onValueChange = { viewModel.setDrmLicenseUrl(it) },
+                                            label = { Text("DRM License URL") },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = Color(0xFF42A5F5),
+                                                unfocusedBorderColor = Color.Gray
+                                            )
+                                        )
+                                        
+                                        // UserAgent and DrmScheme dropdowns row
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            OutlinedTextField(
+                                                value = "Default",
+                                                onValueChange = { },
+                                                label = { Text("UserAgent") },
+                                                modifier = Modifier.weight(1f),
+                                                enabled = false,
+                                                colors = OutlinedTextFieldDefaults.colors(
+                                                    disabledBorderColor = Color.Gray.copy(alpha = 0.5f)
+                                                )
+                                            )
+                                            
+                                            OutlinedTextField(
+                                                value = "widevine",
+                                                onValueChange = { },
+                                                label = { Text("DrmScheme") },
+                                                modifier = Modifier.weight(1f),
+                                                enabled = false,
+                                                colors = OutlinedTextFieldDefaults.colors(
+                                                    disabledBorderColor = Color.Gray.copy(alpha = 0.5f)
+                                                )
                                             )
                                         }
                                     }
                                 }
                             }
+                            
+                            // Action buttons
+                            item {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { 
+                                            if (viewModel.currentUrl.value.isNotBlank()) {
+                                                onPlayVideo(viewModel.currentUrl.value)
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        enabled = viewModel.currentUrl.value.isNotBlank(),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF1976D2)
+                                        )
+                                    ) {
+                                        Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Play Stream")
+                                    }
+                                    
+                                    OutlinedButton(
+                                        onClick = { 
+                                            if (viewModel.currentUrl.value.isNotBlank()) {
+                                                val streamItem = StreamItem(
+                                                    title = "Stream ${viewModel.playlist.size + 1}",
+                                                    url = viewModel.currentUrl.value
+                                                )
+                                                viewModel.addToPlaylist(streamItem)
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        enabled = viewModel.currentUrl.value.isNotBlank()
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Add to Playlist")
+                                    }
+                                }
+                            }
+                            
+                            // Download button
+                            item {
+                                Button(
+                                    onClick = {
+                                        // Start download using WorkManager
+                                        if (viewModel.currentUrl.value.isNotBlank()) {
+                                            val downloadRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
+                                                .setInputData(
+                                                    workDataOf(
+                                                        "url" to viewModel.currentUrl.value,
+                                                        "fileName" to "ny_player_video.mp4"
+                                                    )
+                                                )
+                                                .setConstraints(
+                                                    Constraints.Builder()
+                                                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                                                        .build()
+                                                )
+                                                .build()
+                                            
+                                            WorkManager.getInstance(context).enqueue(downloadRequest)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = viewModel.currentUrl.value.isNotBlank(),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF4CAF50)
+                                    )
+                                ) {
+                                    Icon(Icons.Default.Download, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Download Video")
+                                }
+                                
+                                // Download progress indicator
+                                if (viewModel.downloadProgress.value > 0) {
+                                    LinearProgressIndicator(
+                                        progress = viewModel.downloadProgress.value,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = 8.dp),
+                                        color = Color(0xFF4CAF50)
+                                    )
+                                }
+                            }
                         }
                     }
-                    else -> {
-                        // Other tabs placeholder
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                    
+                    1 -> LocalFilesTab()
+                    2 -> SampleContentTab(onPlayVideo)
+                    3 -> PlaylistTab(viewModel, onPlayVideo)
+                    4 -> SettingsTab()
+                }
+                
+                // Floating play button (matching your screenshot)
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.BottomEnd
+                ) {
+                    FloatingActionButton(
+                        onClick = { 
+                            if (viewModel.currentUrl.value.isNotBlank()) {
+                                onPlayVideo(viewModel.currentUrl.value)
+                            }
+                        },
+                        modifier = Modifier.padding(16.dp),
+                        containerColor = Color(0xFF1976D2)
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = "Play",
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        // Local Files Tab
+        @Composable
+        fun LocalFilesTab() {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = Color(0xFF1976D2)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Local File Browser",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Browse and play local video files",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.Gray
+                    )
+                }
+            }
+        }
+
+        // Sample Content Tab
+        @Composable
+        fun SampleContentTab(onPlayVideo: (String) -> Unit) {
+            val sampleStreams = listOf(
+                StreamItem(
+                    "Big Buck Bunny (4K)",
+                    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+                    "Sample 4K video content"
+                ),
+                StreamItem(
+                    "Elephant Dream (HD)",
+                    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+                    "High quality sample video"
+                ),
+                StreamItem(
+                    "For Bigger Blazes",
+                    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+                    "Action sample content"
+                ),
+                StreamItem(
+                    "Sintel Short Film",
+                    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+                    "Award-winning short film"
+                )
+            )
+            
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(sampleStreams) { stream ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPlayVideo(stream.url) },
+                        elevation = CardDefaults.cardElevation(4.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF1E1E1E)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(
-                                    when(selectedTab) {
-                                        1 -> Icons.Default.Folder
-                                        3 -> Icons.Default.PlaylistPlay
-                                        else -> Icons.Default.Settings
-                                    },
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = Color(0xFF6750A4)
-                                )
-                                
-                                Spacer(modifier = Modifier.height(16.dp))
-                                
+                            Icon(
+                                Icons.Default.PlayCircle,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .background(
+                                        Color(0xFF1976D2),
+                                        CircleShape
+                                    )
+                                    .padding(12.dp),
+                                tint = Color.White
+                            )
+                            
+                            Spacer(modifier = Modifier.width(16.dp))
+                            
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = when(selectedTab) {
-                                        1 -> "Local Files"
-                                        3 -> "Playlist"
-                                        else -> "Settings"
-                                    },
-                                    fontSize = 20.sp,
-                                    fontWeight = FontWeight.Bold
+                                    text = stream.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
-                                
-                                Text(
-                                    text = "Coming soon...",
-                                    color = Color.Gray
+                                if (stream.thumbnail != null) {
+                                    Text(
+                                        text = stream.thumbnail,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.Gray,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            
+                            Icon(
+                                Icons.Default.ArrowForward,
+                                contentDescription = "Play",
+                                tint = Color(0xFF1976D2)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Playlist Tab
+        @Composable
+        fun PlaylistTab(
+            viewModel: PlayerViewModel,
+            onPlayVideo: (String) -> Unit
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Playlist header
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFF1E1E1E)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.PlaylistPlay,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp),
+                            tint = Color(0xFF1976D2)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "My Playlist",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "${viewModel.playlist.size} items",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                }
+                
+                // Playlist items
+                if (viewModel.playlist.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Default.PlaylistAdd,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = Color.Gray
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                "Your playlist is empty",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.Gray
+                            )
+                            Text(
+                                "Add videos from the Home tab",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Gray.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(viewModel.playlist) { item ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPlayVideo(item.url) },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFF1E1E1E)
                                 )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(24.dp),
+                                        tint = Color(0xFF1976D2)
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = item.title,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = item.url,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = Color.Gray,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    
+                                    IconButton(
+                                        onClick = { viewModel.removeFromPlaylist(item) }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = "Remove",
+                                            tint = Color.Red.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
-        
+
+        // Settings Tab
+        @Composable
+        fun SettingsTab() {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF1E1E1E)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                "Player Settings",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            var enableHardwareAcceleration by remember { mutableStateOf(true) }
+                            var autoResumePlayback by remember { mutableStateOf(true) }
+                            var enablePictureInPicture by remember { mutableStateOf(true) }
+                            
+                            // Hardware Acceleration
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Hardware Acceleration")
+                                    Text(
+                                        "Use GPU for video decoding",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.Gray
+                                    )
+                                }
+                                Switch(
+                                    checked = enableHardwareAcceleration,
+                                    onCheckedChange = { enableHardwareAcceleration = it }
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            // Auto Resume
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Auto-Resume Playback")
+                                    Text(
+                                        "Resume from last position",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.Gray
+                                    )
+                                }
+                                Switch(
+                                    checked = autoResumePlayback,
+                                    onCheckedChange = { autoResumePlayback = it }
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            // Picture in Picture
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Picture-in-Picture")
+                                    Text(
+                                        "Enable PiP mode support",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.Gray
+                                    )
+                                }
+                                Switch(
+                                    checked = enablePictureInPicture,
+                                    onCheckedChange = { enablePictureInPicture = it }
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                // App Info Card
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF1E1E1E)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            AsyncImage(
+                                model = "https://graph.org/file/3f4620a46dcbb69d218b0-13e5a8d9424946a373.jpg",
+                                contentDescription = "NY Player Logo",
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(CircleShape)
+                            )
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            Text(
+                                "NY PLAYER",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            
+                            Text(
+                                "Version 2.0.0",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.Gray
+                            )
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            Text(
+                                "Professional Video Streaming Player",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Advanced Player Screen with Full Controls
         @Composable
         fun PlayerScreen(
-            url: String,
+            viewModel: PlayerViewModel,
             onBack: () -> Unit,
             activity: MainActivity
         ) {
             val context = LocalContext.current
             var showControls by remember { mutableStateOf(true) }
+            var currentPosition by remember { mutableLongStateOf(0L) }
+            var duration by remember { mutableLongStateOf(0L) }
+            var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
             
             val exoPlayer = remember {
                 ExoPlayer.Builder(context).build().apply {
-                    setMediaItem(MediaItem.fromUri(url))
+                    val mediaItem = MediaItem.fromUri(Uri.parse(viewModel.currentUrl.value))
+                    setMediaItem(mediaItem)
                     prepare()
                     playWhenReady = true
+                    
+                    addListener(object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            viewModel.setLoading(playbackState == Player.STATE_BUFFERING)
+                            viewModel.setPlaying(playWhenReady && playbackState == Player.STATE_READY)
+                        }
+                        
+                        override fun onPlayerError(error: PlaybackException) {
+                            // Handle playback errors
+                        }
+                    })
                 }
             }
-            
-            DisposableEffect(Unit) {
+
+            DisposableEffect(exoPlayer) {
                 onDispose {
                     exoPlayer.release()
                 }
             }
             
+            // Update playback position
+            LaunchedEffect(exoPlayer) {
+                while (true) {
+                    currentPosition = exoPlayer.currentPosition
+                    duration = exoPlayer.duration.takeIf { it > 0 } ?: 0L
+                    delay(1000)
+                }
+            }
+
             Box(modifier = Modifier.fillMaxSize()) {
-                // Video Player
+                // Video Player View
                 AndroidView(
                     factory = { context ->
                         PlayerView(context).apply {
@@ -666,6 +1478,7 @@ jobs:
                                 ViewGroup.LayoutParams.MATCH_PARENT
                             )
                             useController = false
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                         }
                     },
                     modifier = Modifier
@@ -673,11 +1486,42 @@ jobs:
                         .clickable { showControls = !showControls }
                 )
                 
-                // Custom controls overlay
+                // Loading indicator
+                if (viewModel.isLoading.value) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = Color.Black.copy(alpha = 0.7f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    "Loading...",
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                // Custom Controls Overlay
                 AnimatedVisibility(
                     visible = showControls,
-                    enter = fadeIn(),
-                    exit = fadeOut()
+                    enter = fadeIn() + slideInVertically(),
+                    exit = fadeOut() + slideOutVertically(),
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     Box(
                         modifier = Modifier
@@ -689,9 +1533,18 @@ jobs:
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp)
-                                .align(Alignment.TopStart)
+                                .align(Alignment.TopStart),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = onBack) {
+                            IconButton(
+                                onClick = onBack,
+                                modifier = Modifier
+                                    .background(
+                                        Color.Black.copy(alpha = 0.5f),
+                                        CircleShape
+                                    )
+                            ) {
                                 Icon(
                                     Icons.Default.ArrowBack,
                                     contentDescription = "Back",
@@ -699,28 +1552,67 @@ jobs:
                                 )
                             }
                             
-                            Spacer(modifier = Modifier.weight(1f))
-                            
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                IconButton(onClick = { activity.enterPictureInPictureMode() }) {
-                                    Icon(
-                                        Icons.Default.PictureInPicture,
-                                        contentDescription = "PiP",
-                                        tint = Color.White
+                            Row {
+                                IconButton(
+                                    onClick = { 
+                                        playbackSpeed = when (playbackSpeed) {
+                                            0.25f -> 0.5f
+                                            0.5f -> 1.0f
+                                            1.0f -> 1.25f
+                                            1.25f -> 1.5f
+                                            1.5f -> 2.0f
+                                            else -> 0.25f
+                                        }
+                                        exoPlayer.setPlaybackSpeed(playbackSpeed)
+                                    },
+                                    modifier = Modifier
+                                        .background(
+                                            Color.Black.copy(alpha = 0.5f),
+                                            CircleShape
+                                        )
+                                ) {
+                                    Text(
+                                        "${playbackSpeed}x",
+                                        color = Color.White,
+                                        fontSize = 12.sp
                                     )
+                                }
+                                
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    IconButton(
+                                        onClick = { activity.enterPictureInPictureMode() },
+                                        modifier = Modifier
+                                            .background(
+                                                Color.Black.copy(alpha = 0.5f),
+                                                CircleShape
+                                            )
+                                    ) {
+                                        Icon(
+                                            Icons.Default.PictureInPicture,
+                                            contentDescription = "PiP",
+                                            tint = Color.White
+                                        )
+                                    }
                                 }
                             }
                         }
                         
-                        // Center play/pause
+                        // Center playback controls
                         Row(
                             modifier = Modifier.align(Alignment.Center),
                             horizontalArrangement = Arrangement.spacedBy(24.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            IconButton(onClick = { 
-                                exoPlayer.seekTo(maxOf(0, exoPlayer.currentPosition - 10000))
-                            }) {
+                            IconButton(
+                                onClick = { 
+                                    exoPlayer.seekTo(maxOf(0, exoPlayer.currentPosition - 10000))
+                                },
+                                modifier = Modifier
+                                    .background(
+                                        Color.Black.copy(alpha = 0.5f),
+                                        CircleShape
+                                    )
+                            ) {
                                 Icon(
                                     Icons.Default.Replay10,
                                     contentDescription = "Replay 10s",
@@ -729,24 +1621,39 @@ jobs:
                                 )
                             }
                             
-                            IconButton(onClick = {
-                                if (exoPlayer.isPlaying) {
-                                    exoPlayer.pause()
-                                } else {
-                                    exoPlayer.play()
-                                }
-                            }) {
+                            IconButton(
+                                onClick = {
+                                    if (exoPlayer.isPlaying) {
+                                        exoPlayer.pause()
+                                    } else {
+                                        exoPlayer.play()
+                                    }
+                                },
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .background(
+                                        Color(0xFF1976D2).copy(alpha = 0.9f),
+                                        CircleShape
+                                    )
+                            ) {
                                 Icon(
-                                    if (exoPlayer.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = if (exoPlayer.isPlaying) "Pause" else "Play",
+                                    if (viewModel.isPlaying.value) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    contentDescription = if (viewModel.isPlaying.value) "Pause" else "Play",
                                     tint = Color.White,
-                                    modifier = Modifier.size(48.dp)
+                                    modifier = Modifier.size(36.dp)
                                 )
                             }
                             
-                            IconButton(onClick = { 
-                                exoPlayer.seekTo(exoPlayer.currentPosition + 10000)
-                            }) {
+                            IconButton(
+                                onClick = { 
+                                    exoPlayer.seekTo(minOf(duration, exoPlayer.currentPosition + 10000))
+                                },
+                                modifier = Modifier
+                                    .background(
+                                        Color.Black.copy(alpha = 0.5f),
+                                        CircleShape
+                                    )
+                            ) {
                                 Icon(
                                     Icons.Default.Forward10,
                                     contentDescription = "Forward 10s",
@@ -755,10 +1662,101 @@ jobs:
                                 )
                             }
                         }
+                        
+                        // Bottom controls with seek bar
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomCenter)
+                                .background(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = 0.7f)
+                                        )
+                                    )
+                                )
+                                .padding(16.dp)
+                        ) {
+                            // Seek bar
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    formatTime(currentPosition),
+                                    color = Color.White,
+                                    fontSize = 12.sp
+                                )
+                                
+                                Spacer(modifier = Modifier.width(8.dp))
+                                
+                                Slider(
+                                    value = if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f,
+                                    onValueChange = { value ->
+                                        val seekPosition = (value * duration).toLong()
+                                        exoPlayer.seekTo(seekPosition)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = SliderDefaults.colors(
+                                        thumbColor = Color(0xFF1976D2),
+                                        activeTrackColor = Color(0xFF1976D2),
+                                        inactiveTrackColor = Color.Gray
+                                    )
+                                )
+                                
+                                Spacer(modifier = Modifier.width(8.dp))
+                                
+                                Text(
+                                    formatTime(duration),
+                                    color = Color.White,
+                                    fontSize = 12.sp
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            // Additional controls
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly
+                            ) {
+                                IconButton(onClick = { /* Volume control */ }) {
+                                    Icon(
+                                        Icons.Default.VolumeUp,
+                                        contentDescription = "Volume",
+                                        tint = Color.White
+                                    )
+                                }
+                                
+                                IconButton(onClick = { /* Subtitle settings */ }) {
+                                    Icon(
+                                        Icons.Default.Subtitles,
+                                        contentDescription = "Subtitles",
+                                        tint = Color.White
+                                    )
+                                }
+                                
+                                IconButton(onClick = { /* Quality settings */ }) {
+                                    Icon(
+                                        Icons.Default.HighQuality,
+                                        contentDescription = "Quality",
+                                        tint = Color.White
+                                    )
+                                }
+                                
+                                IconButton(onClick = { /* Fullscreen toggle */ }) {
+                                    Icon(
+                                        Icons.Default.Fullscreen,
+                                        contentDescription = "Fullscreen",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 
-                // Auto-hide controls
+                // Auto-hide controls after 3 seconds
                 LaunchedEffect(showControls) {
                     if (showControls) {
                         delay(3000)
@@ -767,66 +1765,107 @@ jobs:
                 }
             }
         }
+
+        // Additional Screens
+        @Composable
+        fun PlaylistScreen(
+            viewModel: PlayerViewModel,
+            onPlayItem: (String) -> Unit
+        ) {
+            // Implementation for full playlist screen
+        }
+
+        @Composable
+        fun DownloadsScreen(viewModel: PlayerViewModel) {
+            // Implementation for downloads screen
+        }
+
+        @Composable
+        fun SettingsScreen(viewModel: PlayerViewModel) {
+            // Implementation for full settings screen
+        }
+
+        // Utility function to format time
+        fun formatTime(timeMs: Long): String {
+            val totalSeconds = timeMs / 1000
+            val hours = totalSeconds / 3600
+            val minutes = (totalSeconds % 3600) / 60
+            val seconds = totalSeconds % 60
+            
+            return if (hours > 0) {
+                String.format("%d:%02d:%02d", hours, minutes, seconds)
+            } else {
+                String.format("%d:%02d", minutes, seconds)
+            }
+        }
         EOF
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+    - name: 🔨 Build Debug APK
+      run: ./gradlew assembleDebug --stacktrace --info
 
-    - name: Build Release APK  
-      run: ./gradlew assembleRelease --stacktrace
+    - name: 🔨 Build Release APK  
+      run: ./gradlew assembleRelease --stacktrace --info
 
-    - name: Upload Debug APK
+    - name: 📤 Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
-        name: NetworkStreamPlayer-debug-v${{ github.run_number }}
+        name: NY-PLAYER-debug-v${{ github.run_number }}
         path: app/build/outputs/apk/debug/*.apk
         retention-days: 30
 
-    - name: Upload Release APK
+    - name: 📤 Upload Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: NetworkStreamPlayer-release-v${{ github.run_number }}
+        name: NY-PLAYER-release-v${{ github.run_number }}
         path: app/build/outputs/apk/release/*.apk
         retention-days: 30
 
-    - name: Create GitHub Release
+    - name: 🚀 Create GitHub Release
       if: github.event_name == 'workflow_dispatch'
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: v1.0.${{ github.run_number }}
-        name: Network Stream Player v1.0.${{ github.run_number }}
+        tag_name: v2.0.${{ github.run_number }}
+        name: NY PLAYER v2.0.${{ github.run_number }}
         body: |
-          ## 📱 Network Stream Player - Advanced Video Streaming App
+          ## 🎬 NY PLAYER - Professional Video Streaming App
           
-          ### ✨ Features:
-          - 🎬 **Stream videos from URLs** - Support for various video formats
-          - 📱 **Beautiful Material Design 3 UI** - Modern and intuitive interface
-          - 🎯 **Picture-in-Picture Support** - Watch videos while using other apps
-          - ⚡ **Advanced Video Controls** - Play, pause, seek, skip 10s forward/back
-          - 📋 **Multiple Input Fields** - Cookie, Referer, Origin, DRM License support
-          - 🎨 **Sample Content Library** - Test with pre-loaded video URLs
-          - 🌙 **Dark Theme** - Easy on the eyes
-          - 📱 **Responsive Design** - Works great on all screen sizes
+          ### ✨ Advanced Features:
+          - 🎥 **Professional Video Streaming** - Stream from any URL with advanced controls
+          - 🎨 **Beautiful Material Design 3 UI** - Modern, sleek interface with your custom logo
+          - 🖼️ **Custom Logo Integration** - Your NY PLAYER logo with smooth animations
+          - 📱 **Picture-in-Picture Support** - Watch while using other apps (Android 8.0+)
+          - 🎛️ **Advanced Playback Controls** - Play/pause, seek, speed control, skip ±10s
+          - 🎯 **Professional Input Fields** - Cookie, Referer, Origin, DRM License support
+          - 📋 **Smart Playlist Management** - Add, remove, and organize your streams
+          - 💾 **Background Downloads** - Download videos with progress tracking
+          - 🎨 **Animated Splash Screen** - Beautiful entry animation with your logo
+          - 🌙 **Dark Theme Design** - Easy on the eyes with professional styling
+          - ⚡ **Hardware Acceleration** - Smooth playback with GPU optimization
+          - 🔄 **Auto-Resume** - Continue from where you left off
+          - 📱 **Responsive Design** - Perfect on phones and tablets
           
-          ### 🚀 How to Use:
-          1. **Download APK** - Get the release APK from the attachments below
-          2. **Install on Android** - Enable "Install from Unknown Sources" if needed
-          3. **Enter Video URL** - Paste your streaming URL in the Media Stream URL field
-          4. **Add Headers** (Optional) - Fill in Cookie, Referer, Origin values if needed
-          5. **Hit Play** - Tap the blue play button to start streaming!
-          
-          ### 📺 Sample URLs Included:
-          - Big Buck Bunny (HD)
-          - Sample test videos
-          - Various streaming formats supported
-          
-          ### 🛠️ Technical Details:
+          ### 🛠️ Technical Specifications:
           - **Built with**: Kotlin + Jetpack Compose + ExoPlayer
           - **Min Android**: 5.0 (API 21)
-          - **Target Android**: 14 (API 34)
-          - **Architecture**: Single Activity with Navigation
+          - **Target Android**: 14 (API 34)  
+          - **Architecture**: MVVM with Compose Navigation
+          - **Video Formats**: MP4, HLS, DASH, RTSP and more
+          - **Networking**: OkHttp with custom headers support
+          - **Storage**: DataStore for preferences
+          - **Background Tasks**: WorkManager for downloads
           
-          **Perfect for testing streaming URLs and advanced video playback!** 🎉
+          ### 📥 Installation:
+          1. Download the APK file below
+          2. Enable "Install from Unknown Sources" in Android settings
+          3. Install and enjoy professional video streaming!
+          
+          ### 🎮 Usage:
+          - **Home Tab**: Enter your streaming URL and advanced options
+          - **Sample Content**: Try pre-loaded sample videos
+          - **Playlist**: Manage your video collection
+          - **Settings**: Customize player behavior
+          
+          **Perfect for streaming with professional controls and your custom branding!** 🎉
         files: |
           app/build/outputs/apk/release/*.apk
         draft: false
@@ -834,30 +1873,38 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Success Summary
+    - name: ✅ Build Success Summary
       run: |
-        echo "🎉 BUILD COMPLETED SUCCESSFULLY! 🎉" 
+        echo "🎉 NY PLAYER BUILD COMPLETED SUCCESSFULLY! 🎉"
         echo ""
-        echo "📱 Your Network Stream Player app has been built!"
+        echo "🎬 Your professional NY PLAYER app has been built!"
         echo ""
         echo "📥 TO DOWNLOAD YOUR APK:"
         echo "1. Go to 'Actions' tab in your GitHub repository"
-        echo "2. Click on this workflow run"
+        echo "2. Click on this workflow run"  
         echo "3. Scroll down to 'Artifacts' section"
         echo "4. Download:"
-        echo "   • NetworkStreamPlayer-debug-v${{ github.run_number }}.zip (for testing)"
-        echo "   • NetworkStreamPlayer-release-v${{ github.run_number }}.zip (for sharing)"
+        echo "   • NY-PLAYER-debug-v${{ github.run_number }}.zip (for testing)"
+        echo "   • NY-PLAYER-release-v${{ github.run_number }}.zip (for distribution)"
         echo ""
-        echo "🚀 APP FEATURES:"
-        echo "✅ Stream videos from any URL"
-        echo "✅ Beautiful interface matching your screenshot"
-        echo "✅ Cookie/Referer/Origin/DRM support"
-        echo "✅ Picture-in-Picture mode"
-        echo "✅ Advanced video controls"
-        echo "✅ Sample content included"
-        echo "✅ Dark theme design"
+        echo "✨ ADVANCED FEATURES INCLUDED:"
+        echo "✅ Professional video streaming with ExoPlayer"
+        echo "✅ Your custom logo with beautiful animations"
+        echo "✅ Advanced input fields (Cookie, Referer, Origin, DRM)"
+        echo "✅ Picture-in-Picture mode support"
+        echo "✅ Smart playlist management"
+        echo "✅ Background video downloads"
+        echo "✅ Hardware acceleration"
+        echo "✅ Auto-resume functionality"
+        echo "✅ Material Design 3 dark theme"
+        echo "✅ Responsive tablet support"
+        echo "✅ Professional playback controls"
+        echo "✅ Multiple video format support"
         echo ""
-        echo "📲 INSTALLATION:"
-        echo "1. Extract the ZIP file"
-        echo "2. Install the APK on your Android device"
-        echo "3. Start streaming videos!"
+        echo "📱 INSTALLATION STEPS:"
+        echo "1. Extract the downloaded ZIP file"
+        echo "2. Transfer APK to your Android device"
+        echo "3. Enable 'Install from Unknown Sources'"
+        echo "4. Install and start streaming!"
+        echo ""
+        echo "🚀 Ready to stream with NY PLAYER!"
