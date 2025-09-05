@@ -63,7 +63,7 @@ jobs:
         include ':app'
         EOF
         
-    - name: 🔨 Create root build.gradle (FIXED: Updated Kotlin version)
+    - name: 🔨 Create root build.gradle 
       run: |
         cat > build.gradle << 'EOF'
         plugins {
@@ -97,7 +97,7 @@ jobs:
         zipStorePath=wrapper/dists
         EOF
         
-    - name: 📱 Create app build.gradle (FIXED: Compatible Compose version)
+    - name: 📱 Create app build.gradle 
       run: |
         cat > app/build.gradle << 'EOF'
         plugins {
