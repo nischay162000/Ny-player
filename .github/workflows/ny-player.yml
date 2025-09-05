@@ -210,7 +210,7 @@ jobs:
         }
         EOF
         
-    - name: 🎨 Create themes.xml (FIXED: Valid Material theme)
+    - name: 🎨 Create themes.xml 
       run: |
         cat > app/src/main/res/values/themes.xml << 'EOF'
         <resources xmlns:tools="http://schemas.android.com/tools">
