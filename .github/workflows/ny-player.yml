@@ -34,7 +34,7 @@ jobs:
       run: |
         mkdir -p app/src/main/java/com/nyplayer
         mkdir -p app/src/main/res/values
-        mkdir -p app/src/main/res/mipmap-hdpi
+        mkdir -p app/src/main/res/xml
         mkdir -p gradle/wrapper
         
     - name: Create gradle-wrapper.properties
@@ -80,16 +80,6 @@ jobs:
         exec "$JAVACMD" "$@"
         EOF
         chmod +x gradlew
-        
-    - name: Create build.gradle.kts (Root)
-      run: |
-        cat > build.gradle.kts << 'EOF'
-        plugins {
-            id("com.android.application") version "8.2.0" apply false
-            id("org.jetbrains.kotlin.android") version "1.9.10" apply false
-            id("org.jetbrains.kotlin.plugin.compose") version "1.9.10" apply false
-        }
-        EOF
         
     - name: Create settings.gradle.kts
       run: |
@@ -173,6 +163,16 @@ jobs:
         }
         EOF
         
+    - name: Create root build.gradle.kts
+      run: |
+        cat > build.gradle.kts << 'EOF'
+        plugins {
+            id("com.android.application") version "8.2.0" apply false
+            id("org.jetbrains.kotlin.android") version "1.9.10" apply false
+            id("org.jetbrains.kotlin.plugin.compose") version "1.9.10" apply false
+        }
+        EOF
+        
     - name: Create AndroidManifest.xml
       run: |
         cat > app/src/main/AndroidManifest.xml << 'EOF'
@@ -183,13 +183,15 @@ jobs:
         
             <application
                 android:allowBackup="true"
-                android:icon="@android:drawable/ic_media_play"
-                android:label="NY Player"
-                android:theme="@android:style/Theme.Material.DayNight.NoActionBar">
+                android:icon="@mipmap/ic_launcher"
+                android:label="@string/app_name"
+                android:roundIcon="@mipmap/ic_launcher_round"
+                android:theme="@style/Theme.NYPlayer">
                 
                 <activity
                     android:name=".MainActivity"
-                    android:exported="true">
+                    android:exported="true"
+                    android:theme="@style/Theme.NYPlayer">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
                         <category android:name="android.intent.category.LAUNCHER" />
@@ -198,6 +200,35 @@ jobs:
             </application>
         </manifest>
         EOF
+        
+    - name: Create app resources
+      run: |
+        # Create themes.xml
+        cat > app/src/main/res/values/themes.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+            <style name="Theme.NYPlayer" parent="android:Theme.Material.DayNight.NoActionBar" />
+        </resources>
+        EOF
+        
+        # Create strings.xml
+        cat > app/src/main/res/values/strings.xml << 'EOF'
+        <resources>
+            <string name="app_name">NY Player</string>
+        </resources>
+        EOF
+        
+        # Create basic launcher icons
+        mkdir -p app/src/main/res/mipmap-anydpi-v26
+        cat > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@android:color/system_accent1_600"/>
+            <foreground android:drawable="@android:drawable/ic_media_play"/>
+        </adaptive-icon>
+        EOF
+        
+        cp app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
         
     - name: Create MainActivity.kt
       run: |
@@ -273,18 +304,6 @@ jobs:
                         title = "Elephants Dream",
                         duration = 653000L,
                         thumbnail = "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Elephants_Dream_s1_proog.jpg/220px-Elephants_Dream_s1_proog.jpg"
-                    ),
-                    VideoFile(
-                        uri = Uri.parse("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"),
-                        title = "For Bigger Blazes",
-                        duration = 15000L,
-                        thumbnail = null
-                    ),
-                    VideoFile(
-                        uri = Uri.parse("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4"),
-                        title = "Sintel",
-                        duration = 888000L,
-                        thumbnail = "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Sintel_poster.jpg/220px-Sintel_poster.jpg"
                     )
                 )
             }
@@ -325,18 +344,6 @@ jobs:
                                     selected = selectedTab == 1,
                                     onClick = { selectedTab = 1 }
                                 )
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.Download, contentDescription = null) },
-                                    label = { Text("Downloads") },
-                                    selected = selectedTab == 2,
-                                    onClick = { selectedTab = 2 }
-                                )
-                                NavigationBarItem(
-                                    icon = { Icon(Icons.Default.History, contentDescription = null) },
-                                    label = { Text("History") },
-                                    selected = selectedTab == 3,
-                                    onClick = { selectedTab = 3 }
-                                )
                             }
                         }
                     ) { paddingValues ->
@@ -350,12 +357,7 @@ jobs:
                                 modifier = Modifier.padding(paddingValues)
                             )
                             else -> PlaceholderScreen(
-                                title = when(selectedTab) {
-                                    1 -> "Playlists"
-                                    2 -> "Downloads" 
-                                    3 -> "History"
-                                    else -> "Screen"
-                                },
+                                title = "Playlists",
                                 modifier = Modifier.padding(paddingValues)
                             )
                         }
@@ -413,12 +415,6 @@ jobs:
                             color = Color.White
                         )
                     )
-                    Text(
-                        text = "Premium Video Experience",
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
-                    )
                 }
             }
         }
@@ -446,7 +442,7 @@ jobs:
                         Column {
                             Box {
                                 AsyncImage(
-                                    model = video.thumbnail ?: "https://via.placeholder.com/300x200/1976D2/FFFFFF?text=Video",
+                                    model = video.thumbnail,
                                     contentDescription = null,
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -531,20 +527,6 @@ jobs:
                                 .fillMaxWidth()
                                 .aspectRatio(16f / 9f)
                         )
-                        
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = video.title,
-                                style = MaterialTheme.typography.headlineSmall,
-                                color = Color.White
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Duration: ${formatDuration(video.duration)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
-                        }
                     }
                 }
             }
@@ -561,12 +543,7 @@ jobs:
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        when(title) {
-                            "Playlists" -> Icons.Default.PlaylistPlay
-                            "Downloads" -> Icons.Default.Download
-                            "History" -> Icons.Default.History
-                            else -> Icons.Default.VideoLibrary
-                        },
+                        Icons.Default.PlaylistPlay,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
                         tint = Color(0xFF1976D2)
@@ -587,18 +564,6 @@ jobs:
             val duration: Long = 0L,
             val thumbnail: String? = null
         )
-        
-        fun formatDuration(durationMs: Long): String {
-            val hours = TimeUnit.MILLISECONDS.toHours(durationMs)
-            val minutes = TimeUnit.MILLISECONDS.toMinutes(durationMs) % 60
-            val seconds = TimeUnit.MILLISECONDS.toSeconds(durationMs) % 60
-            
-            return if (hours > 0) {
-                String.format("%02d:%02d:%02d", hours, minutes, seconds)
-            } else {
-                String.format("%02d:%02d", minutes, seconds)
-            }
-        }
         EOF
         
     - name: Cache Gradle packages
@@ -614,14 +579,14 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
       
-    - name: Build release APK only
+    - name: Build release APK
       run: ./gradlew assembleRelease
       
     - name: Upload release APK
       uses: actions/upload-artifact@v4
       with:
         name: ny-player-release-apk
-        path: app/build/outputs/apk/release/app-release.apk
+        path: app/build/outputs/apk/release/app-release-unsigned.apk
         retention-days: 30
         
     - name: Create GitHub Release
@@ -634,23 +599,16 @@ jobs:
           ## NY Player - Premium Video Player
           
           ### ✨ Features
-          - 🎥 Multi-format video playback with ExoPlayer
-          - 📱 Modern Material 3 UI with Jetpack Compose
-          - 🎬 Animated splash screen with custom logo
+          - 🎥 ExoPlayer video playback
+          - 📱 Modern Material 3 UI
+          - 🎬 Animated splash screen
           - 📂 Video library with grid view
-          - 🎵 Sample videos included for testing
-          - 📋 Navigation between sections
-          - 🌙 Dark theme optimized
-          - 📺 Full-screen video player with controls
-          
-          ### 🚀 Installation
-          1. Download the APK below
-          2. Enable "Install from Unknown Sources" in Android settings
-          3. Install and enjoy!
+          - 🎵 Sample videos included
+          - 📺 Full-screen player
           
           Built from commit: `${{ github.sha }}`
         files: |
-          app/build/outputs/apk/release/app-release.apk
+          app/build/outputs/apk/release/app-release-unsigned.apk
         draft: false
         prerelease: false
       env:
