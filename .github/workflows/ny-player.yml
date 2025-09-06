@@ -35,7 +35,6 @@ jobs:
         mkdir -p app/src/main/java/com/nyplayer
         mkdir -p app/src/main/res/values
         mkdir -p app/src/main/res/mipmap-hdpi
-        mkdir -p app/src/main/res/xml
         mkdir -p gradle/wrapper
         
     - name: Create gradle-wrapper.properties
@@ -61,98 +60,43 @@ jobs:
         #!/usr/bin/env sh
         
         DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
-        GRADLE_OPTS=""
-        JAVA_OPTS=""
-        
-        # Use the maximum available, or set MAX_FD != -1 to use that value.
-        MAX_FD="maximum"
-        
-        warn () {
-            echo "$*"
-        }
-        
-        die () {
-            echo
-            echo "$*"
-            echo
-            exit 1
-        }
-        
-        # OS specific support (must be 'true' or 'false').
-        cygwin=false
-        msys=false
-        darwin=false
-        nonstop=false
-        case "`uname`" in
-          CYGWIN* )
-            cygwin=true
-            ;;
-          Darwin* )
-            darwin=true
-            ;;
-          MINGW* )
-            msys=true
-            ;;
-          NONSTOP* )
-            nonstop=true
-            ;;
-        esac
-        
-        CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
         
         # Determine the Java command to use to start the JVM.
         if [ -n "$JAVA_HOME" ] ; then
             if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
-                # IBM's JDK on AIX uses strange locations for the executables
                 JAVACMD="$JAVA_HOME/jre/sh/java"
             else
                 JAVACMD="$JAVA_HOME/bin/java"
             fi
-            if [ ! -x "$JAVACMD" ] ; then
-                die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
-        
-        Please set the JAVA_HOME variable in your environment to match the
-        location of your Java installation."
-            fi
         else
             JAVACMD="java"
-            which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
-        
-        Please set the JAVA_HOME variable in your environment to match the
-        location of your Java installation."
         fi
         
-        # Escape application args
-        save () {
-            for i do printf %s\\n "$i" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/' \\\\/" ; done
-            echo " "
-        }
-        APP_ARGS=$(save "$@")
+        CLASSPATH="gradle/wrapper/gradle-wrapper.jar"
         
         # Collect all arguments for the java command
-        eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dorg.gradle.appname=$APP_BASE_NAME\"" -classpath "\"$CLASSPATH\"" org.gradle.wrapper.GradleWrapperMain "$APP_ARGS"
-        
-        # by default we should be in the correct project dir, but when run from Finder on Mac, the cwd is wrong
-        if [ "$(uname)" = "Darwin" ] && [ "$HOME" = "$PWD" ]; then
-          cd "$(dirname "$0")"
-        fi
+        eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dorg.gradle.appname=gradlew\"" -classpath "\"$CLASSPATH\"" org.gradle.wrapper.GradleWrapperMain "$@"
         
         exec "$JAVACMD" "$@"
         EOF
         chmod +x gradlew
+        
+    - name: Create build.gradle.kts (Root)
+      run: |
+        cat > build.gradle.kts << 'EOF'
+        plugins {
+            id("com.android.application") version "8.2.0" apply false
+            id("org.jetbrains.kotlin.android") version "1.9.10" apply false
+            id("org.jetbrains.kotlin.plugin.compose") version "1.9.10" apply false
+        }
+        EOF
         
     - name: Create settings.gradle.kts
       run: |
         cat > settings.gradle.kts << 'EOF'
         pluginManagement {
             repositories {
-                google {
-                    content {
-                        includeGroupByRegex("com\\.android.*")
-                        includeGroupByRegex("com\\.google.*")
-                        includeGroupByRegex("androidx.*")
-                    }
-                }
+                google()
                 mavenCentral()
                 gradlePluginPortal()
             }
@@ -169,80 +113,13 @@ jobs:
         include(":app")
         EOF
         
-    - name: Create root build.gradle.kts
-      run: |
-        cat > build.gradle.kts << 'EOF'
-        plugins {
-            alias(libs.plugins.android.application) apply false
-            alias(libs.plugins.kotlin.android) apply false
-            alias(libs.plugins.kotlin.compose) apply false
-        }
-        EOF
-        
-    - name: Create libs.versions.toml
-      run: |
-        mkdir -p gradle
-        cat > gradle/libs.versions.toml << 'EOF'
-        [versions]
-        agp = "8.2.0"
-        kotlin = "1.9.10"
-        coreKtx = "1.12.0"
-        junit = "4.13.2"
-        junitVersion = "1.1.5"
-        espressoCore = "3.5.1"
-        lifecycleRuntimeKtx = "2.7.0"
-        activityCompose = "1.8.2"
-        composeBom = "2023.10.01"
-        media3 = "1.2.0"
-        navigation = "2.7.5"
-        coroutines = "1.7.3"
-        datastore = "1.0.0"
-        work = "2.9.0"
-        coil = "2.5.0"
-        cast = "21.4.0"
-        splashscreen = "1.0.1"
-        
-        [libraries]
-        androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-        junit = { group = "junit", name = "junit", version.ref = "junit" }
-        androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
-        androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
-        androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
-        androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
-        androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
-        androidx-ui = { group = "androidx.compose.ui", name = "ui" }
-        androidx-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
-        androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
-        androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-        androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
-        androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
-        androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
-        androidx-material-icons = { group = "androidx.compose.material", name = "material-icons-extended" }
-        androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
-        androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
-        androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
-        androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigation" }
-        androidx-lifecycle-viewmodel = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleRuntimeKtx" }
-        kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
-        androidx-datastore = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
-        androidx-work = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
-        coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
-        play-services-cast = { group = "com.google.android.gms", name = "play-services-cast-framework", version.ref = "cast" }
-        androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
-        
-        [plugins]
-        android-application = { id = "com.android.application", version.ref = "agp" }
-        kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-        kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-        EOF
-        
     - name: Create app/build.gradle.kts
       run: |
         cat > app/build.gradle.kts << 'EOF'
         plugins {
-            alias(libs.plugins.android.application)
-            alias(libs.plugins.kotlin.android)
-            alias(libs.plugins.kotlin.compose)
+            id("com.android.application")
+            id("org.jetbrains.kotlin.android")
+            id("org.jetbrains.kotlin.plugin.compose")
         }
         
         android {
@@ -255,14 +132,11 @@ jobs:
                 targetSdk = 34
                 versionCode = 1
                 versionName = "1.0"
-                
-                testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
             }
             
             buildTypes {
                 release {
                     isMinifyEnabled = false
-                    proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
                 }
             }
             
@@ -281,88 +155,41 @@ jobs:
         }
         
         dependencies {
-            implementation(libs.androidx.core.ktx)
-            implementation(libs.androidx.lifecycle.runtime.ktx)
-            implementation(libs.androidx.activity.compose)
-            implementation(platform(libs.androidx.compose.bom))
-            implementation(libs.androidx.ui)
-            implementation(libs.androidx.ui.graphics)
-            implementation(libs.androidx.ui.tooling.preview)
-            implementation(libs.androidx.material3)
-            implementation(libs.androidx.material.icons)
+            implementation("androidx.core:core-ktx:1.12.0")
+            implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+            implementation("androidx.activity:activity-compose:1.8.2")
+            implementation(platform("androidx.compose:compose-bom:2023.10.01"))
+            implementation("androidx.compose.ui:ui")
+            implementation("androidx.compose.ui:ui-tooling-preview")
+            implementation("androidx.compose.material3:material3")
+            implementation("androidx.compose.material:material-icons-extended")
             
             // Media3 ExoPlayer
-            implementation(libs.androidx.media3.exoplayer)
-            implementation(libs.androidx.media3.ui)
-            implementation(libs.androidx.media3.session)
-            
-            // Navigation
-            implementation(libs.androidx.navigation.compose)
-            
-            // ViewModel
-            implementation(libs.androidx.lifecycle.viewmodel)
-            
-            // Coroutines
-            implementation(libs.kotlinx.coroutines.android)
-            
-            // DataStore
-            implementation(libs.androidx.datastore)
-            
-            // WorkManager
-            implementation(libs.androidx.work)
+            implementation("androidx.media3:media3-exoplayer:1.2.0")
+            implementation("androidx.media3:media3-ui:1.2.0")
             
             // Image loading
-            implementation(libs.coil.compose)
-            
-            // Cast
-            implementation(libs.play.services.cast)
-            
-            // Splash Screen
-            implementation(libs.androidx.core.splashscreen)
-            
-            testImplementation(libs.junit)
-            androidTestImplementation(libs.androidx.junit)
-            androidTestImplementation(libs.androidx.espresso.core)
-            androidTestImplementation(platform(libs.androidx.compose.bom))
-            androidTestImplementation(libs.androidx.ui.test.junit4)
-            debugImplementation(libs.androidx.ui.tooling)
-            debugImplementation(libs.androidx.ui.test.manifest)
+            implementation("io.coil-kt:coil-compose:2.5.0")
         }
-        EOF
-        
-    - name: Create proguard-rules.pro
-      run: |
-        cat > app/proguard-rules.pro << 'EOF'
-        # Add project specific ProGuard rules here.
-        -keep class androidx.media3.** { *; }
-        -dontwarn androidx.media3.**
         EOF
         
     - name: Create AndroidManifest.xml
       run: |
         cat > app/src/main/AndroidManifest.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-            xmlns:tools="http://schemas.android.com/tools">
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
         
             <uses-permission android:name="android.permission.INTERNET" />
-            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-            <uses-permission android:name="android.permission.WAKE_LOCK" />
         
             <application
                 android:allowBackup="true"
-                android:icon="@mipmap/ic_launcher"
-                android:label="@string/app_name"
-                android:roundIcon="@mipmap/ic_launcher_round"
-                android:theme="@style/Theme.NYPlayer"
-                android:hardwareAccelerated="true"
-                tools:targetApi="31">
+                android:icon="@android:drawable/ic_media_play"
+                android:label="NY Player"
+                android:theme="@android:style/Theme.Material.DayNight.NoActionBar">
                 
                 <activity
                     android:name=".MainActivity"
-                    android:exported="true"
-                    android:theme="@style/Theme.NYPlayer">
+                    android:exported="true">
                     <intent-filter>
                         <action android:name="android.intent.action.MAIN" />
                         <category android:name="android.intent.category.LAUNCHER" />
@@ -371,61 +198,6 @@ jobs:
             </application>
         </manifest>
         EOF
-        
-    - name: Create app resources
-      run: |
-        # Create themes.xml
-        cat > app/src/main/res/values/themes.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <resources xmlns:tools="http://schemas.android.com/tools">
-            <style name="Theme.NYPlayer" parent="android:Theme.Material.DayNight.NoActionBar">
-                <item name="android:statusBarColor">@android:color/transparent</item>
-            </style>
-        </resources>
-        EOF
-        
-        # Create strings.xml
-        cat > app/src/main/res/values/strings.xml << 'EOF'
-        <resources>
-            <string name="app_name">NY Player</string>
-        </resources>
-        EOF
-        
-        # Create backup and data extraction rules
-        cat > app/src/main/res/xml/backup_rules.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <full-backup-content />
-        EOF
-        
-        cat > app/src/main/res/xml/data_extraction_rules.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <data-extraction-rules>
-            <cloud-backup />
-            <device-transfer />
-        </data-extraction-rules>
-        EOF
-        
-        # Create placeholder icons (using built-in Android resources)
-        mkdir -p app/src/main/res/mipmap-hdpi app/src/main/res/mipmap-mdpi app/src/main/res/mipmap-xhdpi app/src/main/res/mipmap-xxhdpi app/src/main/res/mipmap-xxxhdpi
-        
-        # Create a basic launcher icon XML (vector drawable)
-        cat > app/src/main/res/mipmap-hdpi/ic_launcher.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-            <background android:drawable="@android:color/system_accent1_600"/>
-            <foreground android:drawable="@android:drawable/ic_media_play"/>
-        </adaptive-icon>
-        EOF
-        
-        cp app/src/main/res/mipmap-hdpi/ic_launcher.xml app/src/main/res/mipmap-hdpi/ic_launcher_round.xml
-        cp app/src/main/res/mipmap-hdpi/ic_launcher.xml app/src/main/res/mipmap-mdpi/ic_launcher.xml
-        cp app/src/main/res/mipmap-hdpi/ic_launcher.xml app/src/main/res/mipmap-mdpi/ic_launcher_round.xml
-        cp app/src/main/res/mipmap-hdpi/ic_launcher.xml app/src/main/res/mipmap-xhdpi/ic_launcher.xml
-        cp app/src/main/res/mipmap-hdpi/ic_launcher.xml app/src/main/res/mipmap-xhdpi/ic_launcher_round.xml
-        cp app/src/main/res/mipmap-hdpi/ic_launcher.xml app/src/main/res/mipmap-xxhdpi/ic_launcher.xml
-        cp app/src/main/res/mipmap-hdpi/ic_launcher.xml app/src/main/res/mipmap-xxhdpi/ic_launcher_round.xml
-        cp app/src/main/res/mipmap-hdpi/ic_launcher.xml app/src/main/res/mipmap-xxxhdpi/ic_launcher.xml
-        cp app/src/main/res/mipmap-hdpi/ic_launcher.xml app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.xml
         
     - name: Create MainActivity.kt
       run: |
@@ -440,11 +212,9 @@ jobs:
         import androidx.compose.animation.core.*
         import androidx.compose.foundation.*
         import androidx.compose.foundation.layout.*
-        import androidx.compose.foundation.lazy.LazyColumn
         import androidx.compose.foundation.lazy.grid.GridCells
         import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
         import androidx.compose.foundation.lazy.grid.items
-        import androidx.compose.foundation.lazy.items
         import androidx.compose.foundation.shape.CircleShape
         import androidx.compose.foundation.shape.RoundedCornerShape
         import androidx.compose.material.icons.Icons
@@ -455,7 +225,6 @@ jobs:
         import androidx.compose.ui.Modifier
         import androidx.compose.ui.draw.clip
         import androidx.compose.ui.draw.scale
-        import androidx.compose.ui.geometry.Offset
         import androidx.compose.ui.graphics.Brush
         import androidx.compose.ui.graphics.Color
         import androidx.compose.ui.layout.ContentScale
@@ -465,7 +234,6 @@ jobs:
         import androidx.compose.ui.text.style.TextOverflow
         import androidx.compose.ui.unit.dp
         import androidx.compose.ui.viewinterop.AndroidView
-        import androidx.core.view.WindowCompat
         import androidx.media3.common.MediaItem
         import androidx.media3.common.util.UnstableApi
         import androidx.media3.exoplayer.ExoPlayer
@@ -478,46 +246,20 @@ jobs:
         class MainActivity : ComponentActivity() {
             override fun onCreate(savedInstanceState: Bundle?) {
                 super.onCreate(savedInstanceState)
-                
-                WindowCompat.setDecorFitsSystemWindows(window, false)
-                
                 setContent {
-                    NYPlayerTheme {
-                        NYPlayerApp()
-                    }
+                    NYPlayerApp()
                 }
             }
         }
         
-        // Theme
-        @Composable
-        fun NYPlayerTheme(content: @Composable () -> Unit) {
-            val darkColorScheme = darkColorScheme(
-                primary = Color(0xFF1976D2),
-                onPrimary = Color.White,
-                surface = Color(0xFF121212),
-                onSurface = Color.White,
-                background = Color.Black,
-                onBackground = Color.White
-            )
-            
-            MaterialTheme(
-                colorScheme = darkColorScheme,
-                content = content
-            )
-        }
-        
-        // Main App
         @OptIn(ExperimentalMaterial3Api::class)
         @Composable
         fun NYPlayerApp() {
             var showSplash by remember { mutableStateOf(true) }
             var selectedTab by remember { mutableStateOf(0) }
             var currentVideo by remember { mutableStateOf<VideoFile?>(null) }
-            var isPlaying by remember { mutableStateOf(false) }
             var showPlayer by remember { mutableStateOf(false) }
             
-            // Sample video data
             val sampleVideos = remember {
                 listOf(
                     VideoFile(
@@ -557,63 +299,71 @@ jobs:
                     onBack = { showPlayer = false }
                 )
             } else {
-                Scaffold(
-                    topBar = {
-                        TopAppBar(
-                            title = { Text("NY Player") },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                titleContentColor = MaterialTheme.colorScheme.onPrimary
+                MaterialTheme(
+                    colorScheme = darkColorScheme()
+                ) {
+                    Scaffold(
+                        topBar = {
+                            TopAppBar(
+                                title = { Text("NY Player", color = Color.White) },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = Color(0xFF1976D2)
+                                )
                             )
-                        )
-                    },
-                    bottomBar = {
-                        NavigationBar {
-                            NavigationBarItem(
-                                icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) },
-                                label = { Text("Library") },
-                                selected = selectedTab == 0,
-                                onClick = { selectedTab = 0 }
+                        },
+                        bottomBar = {
+                            NavigationBar {
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.VideoLibrary, contentDescription = null) },
+                                    label = { Text("Library") },
+                                    selected = selectedTab == 0,
+                                    onClick = { selectedTab = 0 }
+                                )
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.PlaylistPlay, contentDescription = null) },
+                                    label = { Text("Playlists") },
+                                    selected = selectedTab == 1,
+                                    onClick = { selectedTab = 1 }
+                                )
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.Download, contentDescription = null) },
+                                    label = { Text("Downloads") },
+                                    selected = selectedTab == 2,
+                                    onClick = { selectedTab = 2 }
+                                )
+                                NavigationBarItem(
+                                    icon = { Icon(Icons.Default.History, contentDescription = null) },
+                                    label = { Text("History") },
+                                    selected = selectedTab == 3,
+                                    onClick = { selectedTab = 3 }
+                                )
+                            }
+                        }
+                    ) { paddingValues ->
+                        when (selectedTab) {
+                            0 -> LibraryScreen(
+                                videos = sampleVideos,
+                                onVideoClick = { video ->
+                                    currentVideo = video
+                                    showPlayer = true
+                                },
+                                modifier = Modifier.padding(paddingValues)
                             )
-                            NavigationBarItem(
-                                icon = { Icon(Icons.Default.PlaylistPlay, contentDescription = null) },
-                                label = { Text("Playlists") },
-                                selected = selectedTab == 1,
-                                onClick = { selectedTab = 1 }
-                            )
-                            NavigationBarItem(
-                                icon = { Icon(Icons.Default.Download, contentDescription = null) },
-                                label = { Text("Downloads") },
-                                selected = selectedTab == 2,
-                                onClick = { selectedTab = 2 }
-                            )
-                            NavigationBarItem(
-                                icon = { Icon(Icons.Default.History, contentDescription = null) },
-                                label = { Text("History") },
-                                selected = selectedTab == 3,
-                                onClick = { selectedTab = 3 }
+                            else -> PlaceholderScreen(
+                                title = when(selectedTab) {
+                                    1 -> "Playlists"
+                                    2 -> "Downloads" 
+                                    3 -> "History"
+                                    else -> "Screen"
+                                },
+                                modifier = Modifier.padding(paddingValues)
                             )
                         }
-                    }
-                ) { paddingValues ->
-                    when (selectedTab) {
-                        0 -> LibraryScreen(
-                            videos = sampleVideos,
-                            onVideoClick = { video ->
-                                currentVideo = video
-                                showPlayer = true
-                            },
-                            modifier = Modifier.padding(paddingValues)
-                        )
-                        1 -> PlaylistsScreen(modifier = Modifier.padding(paddingValues))
-                        2 -> DownloadsScreen(modifier = Modifier.padding(paddingValues))
-                        3 -> HistoryScreen(modifier = Modifier.padding(paddingValues))
                     }
                 }
             }
         }
         
-        // Splash Screen
         @Composable
         fun SplashScreen(onSplashFinished: () -> Unit) {
             val scale = remember { Animatable(0f) }
@@ -621,26 +371,13 @@ jobs:
             
             LaunchedEffect(Unit) {
                 launch {
-                    scale.animateTo(
-                        targetValue = 1.2f,
-                        animationSpec = tween(800, easing = FastOutSlowInEasing)
-                    )
-                    scale.animateTo(
-                        targetValue = 1f,
-                        animationSpec = tween(200, easing = LinearOutSlowInEasing)
-                    )
+                    scale.animateTo(1.2f, animationSpec = tween(800))
+                    scale.animateTo(1f, animationSpec = tween(200))
                 }
-                
                 launch {
-                    alpha.animateTo(
-                        targetValue = 1f,
-                        animationSpec = tween(600, easing = LinearEasing)
-                    )
+                    alpha.animateTo(1f, animationSpec = tween(600))
                     delay(2000)
-                    alpha.animateTo(
-                        targetValue = 0f,
-                        animationSpec = tween(400, easing = FastOutLinearInEasing)
-                    )
+                    alpha.animateTo(0f, animationSpec = tween(400))
                     onSplashFinished()
                 }
             }
@@ -650,10 +387,7 @@ jobs:
                     .fillMaxSize()
                     .background(
                         Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF1976D2),
-                                Color(0xFF0D47A1)
-                            )
+                            colors = listOf(Color(0xFF1976D2), Color(0xFF0D47A1))
                         )
                     ),
                 contentAlignment = Alignment.Center
@@ -671,9 +405,7 @@ jobs:
                             .clip(CircleShape),
                         contentScale = ContentScale.Crop
                     )
-                    
                     Spacer(modifier = Modifier.height(24.dp))
-                    
                     Text(
                         text = "NY Player",
                         style = MaterialTheme.typography.headlineMedium.copy(
@@ -681,7 +413,6 @@ jobs:
                             color = Color.White
                         )
                     )
-                    
                     Text(
                         text = "Premium Video Experience",
                         style = MaterialTheme.typography.bodyMedium.copy(
@@ -692,7 +423,6 @@ jobs:
             }
         }
         
-        // Library Screen
         @Composable
         fun LibraryScreen(
             videos: List<VideoFile>,
@@ -707,74 +437,45 @@ jobs:
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(videos) { video ->
-                    VideoGridItem(
-                        video = video,
-                        onClick = { onVideoClick(video) }
-                    )
-                }
-            }
-        }
-        
-        @Composable
-        fun VideoGridItem(
-            video: VideoFile,
-            onClick: () -> Unit
-        ) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onClick() },
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column {
-                    Box {
-                        AsyncImage(
-                            model = video.thumbnail ?: "https://via.placeholder.com/300x200/1976D2/FFFFFF?text=Video",
-                            contentDescription = null,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp),
-                            contentScale = ContentScale.Crop
-                        )
-                        
-                        Surface(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(8.dp),
-                            color = Color.Black.copy(alpha = 0.7f),
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Text(
-                                text = formatDuration(video.duration),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White
-                            )
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onVideoClick(video) },
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Column {
+                            Box {
+                                AsyncImage(
+                                    model = video.thumbnail ?: "https://via.placeholder.com/300x200/1976D2/FFFFFF?text=Video",
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(120.dp),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Icon(
+                                    Icons.Default.PlayArrow,
+                                    contentDescription = "Play",
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .size(48.dp),
+                                    tint = Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    text = video.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
-                        
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = "Play",
-                            modifier = Modifier
-                                .align(Alignment.Center)
-                                .size(48.dp),
-                            tint = Color.White.copy(alpha = 0.8f)
-                        )
-                    }
-                    
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = video.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
                     }
                 }
             }
         }
         
-        // Video Player Screen
         @OptIn(ExperimentalMaterial3Api::class)
         @Composable
         fun VideoPlayerScreen(
@@ -797,188 +498,89 @@ jobs:
                 }
             }
             
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = { 
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            title = { Text(video.title, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            navigationIcon = {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Black
+                            )
+                        )
+                    }
+                ) { paddingValues ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                            .background(Color.Black)
+                    ) {
+                        AndroidView(
+                            factory = { context ->
+                                PlayerView(context).apply {
+                                    player = exoPlayer
+                                    useController = true
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f)
+                        )
+                        
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Text(
                                 text = video.title,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            ) 
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Black,
-                            titleContentColor = Color.White,
-                            navigationIconContentColor = Color.White
-                        )
-                    )
-                }
-            ) { paddingValues ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                        .background(Color.Black)
-                ) {
-                    AndroidView(
-                        factory = { context ->
-                            PlayerView(context).apply {
-                                player = exoPlayer
-                                useController = true
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(16f / 9f)
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = video.title,
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = Color.White
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text(
-                            text = "Duration: ${formatDuration(video.duration)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.7f)
-                        )
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            Button(
-                                onClick = { /* Add to playlist */ },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
-                            ) {
-                                Icon(Icons.Default.PlaylistAdd, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Add to Playlist")
-                            }
-                            
-                            Button(
-                                onClick = { /* Download */ },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.secondary
-                                )
-                            ) {
-                                Icon(Icons.Default.Download, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text("Download")
-                            }
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Duration: ${formatDuration(video.duration)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
                         }
                     }
                 }
             }
         }
         
-        // Other Screens
         @Composable
-        fun PlaylistsScreen(modifier: Modifier = Modifier) {
+        fun PlaceholderScreen(
+            title: String,
+            modifier: Modifier = Modifier
+        ) {
             Box(
                 modifier = modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        Icons.Default.PlaylistPlay,
+                        when(title) {
+                            "Playlists" -> Icons.Default.PlaylistPlay
+                            "Downloads" -> Icons.Default.Download
+                            "History" -> Icons.Default.History
+                            else -> Icons.Default.VideoLibrary
+                        },
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = Color(0xFF1976D2)
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Playlists",
+                        text = title,
                         style = MaterialTheme.typography.headlineSmall,
                         textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "Create and manage your video playlists",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
             }
         }
         
-        @Composable
-        fun DownloadsScreen(modifier: Modifier = Modifier) {
-            Box(
-                modifier = modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.Download,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Downloads",
-                        style = MaterialTheme.typography.headlineSmall,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "Downloaded videos for offline viewing",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
-        }
-        
-        @Composable
-        fun HistoryScreen(modifier: Modifier = Modifier) {
-            Box(
-                modifier = modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.History,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "History",
-                        style = MaterialTheme.typography.headlineSmall,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = "Recently played and most watched videos",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
-        }
-        
-        // Data Classes
         data class VideoFile(
             val uri: Uri,
             val title: String,
@@ -986,7 +588,6 @@ jobs:
             val thumbnail: String? = null
         )
         
-        // Utility Functions
         fun formatDuration(durationMs: Long): String {
             val hours = TimeUnit.MILLISECONDS.toHours(durationMs)
             val minutes = TimeUnit.MILLISECONDS.toMinutes(durationMs) % 60
@@ -1006,26 +607,16 @@ jobs:
         path: |
           ~/.gradle/caches
           ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
           
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
       
-    - name: Build debug APK
-      run: ./gradlew assembleDebug --stacktrace
+    - name: Build release APK only
+      run: ./gradlew assembleRelease
       
-    - name: Build release APK
-      run: ./gradlew assembleRelease --stacktrace
-      
-    - name: Upload debug APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: ny-player-debug-apk
-        path: app/build/outputs/apk/debug/app-debug.apk
-        retention-days: 30
-        
     - name: Upload release APK
       uses: actions/upload-artifact@v4
       with:
@@ -1034,7 +625,7 @@ jobs:
         retention-days: 30
         
     - name: Create GitHub Release
-      if: ${{ github.event.inputs.create_release == 'true' && github.ref == 'refs/heads/main' }}
+      if: ${{ github.event.inputs.create_release == 'true' }}
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v1.0.${{ github.run_number }}
@@ -1046,25 +637,19 @@ jobs:
           - 🎥 Multi-format video playback with ExoPlayer
           - 📱 Modern Material 3 UI with Jetpack Compose
           - 🎬 Animated splash screen with custom logo
-          - 📂 Video library with grid/list view
+          - 📂 Video library with grid view
           - 🎵 Sample videos included for testing
-          - 📋 Playlists, Downloads, and History sections
+          - 📋 Navigation between sections
           - 🌙 Dark theme optimized
           - 📺 Full-screen video player with controls
-          - 🔄 Hardware acceleration support
-          - 💾 Built-in sample content for demo
           
           ### 🚀 Installation
           1. Download the APK below
           2. Enable "Install from Unknown Sources" in Android settings
           3. Install and enjoy!
           
-          ### 📋 Build Info
-          - Built from commit: `${{ github.sha }}`
-          - Target SDK: 34
-          - Minimum SDK: 24
+          Built from commit: `${{ github.sha }}`
         files: |
-          app/build/outputs/apk/debug/app-debug.apk
           app/build/outputs/apk/release/app-release.apk
         draft: false
         prerelease: false
