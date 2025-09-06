@@ -335,7 +335,7 @@ jobs:
         EOF
         done
 
-    # Step 11: Create the main Kotlin file with complete NY Player implementation
+    # Step 11: Create the main Kotlin file with simplified NY Player implementation
     - name: Create MainActivity.kt
       run: |
         cat > app/src/main/java/com/nyplayer/MainActivity.kt << 'EOF'
@@ -343,26 +343,890 @@ jobs:
 
         import android.Manifest
         import android.annotation.SuppressLint
-        import android.app.Activity
         import android.app.PictureInPictureParams
-        import android.content.Context
         import android.content.Intent
         import android.content.pm.ActivityInfo
         import android.content.pm.PackageManager
-        import android.graphics.Bitmap
-        import android.media.AudioManager
-        import android.media.MediaMetadataRetriever
         import android.net.Uri
         import android.os.Build
         import android.os.Bundle
-        import android.os.Handler
-        import android.os.Looper
-        import android.provider.DocumentsContract
         import android.provider.MediaStore
-        import android.support.v4.media.session.MediaSessionCompat
-        import android.support.v4.media.session.PlaybackStateCompat
-        import android.util.Log
         import android.util.Rational
+        import android.view.View
+        import androidx.activity.ComponentActivity
+        import androidx.activity.compose.rememberLauncherForActivityResult
+        import androidx.activity.compose.setContent
+        import androidx.activity.result.contract.ActivityResultContracts
+        import androidx.compose.animation.core.*
+        import androidx.compose.animation.AnimatedVisibility
+        import androidx.compose.animation.fadeIn
+        import androidx.compose.animation.fadeOut
+        import androidx.compose.foundation.*
+        import androidx.compose.foundation.layout.*
+        import androidx.compose.foundation.lazy.LazyColumn
+        import androidx.compose.foundation.lazy.grid.GridCells
+        import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+        import androidx.compose.foundation.lazy.grid.items
+        import androidx.compose.foundation.lazy.items
+        import androidx.compose.foundation.shape.CircleShape
+        import androidx.compose.foundation.shape.RoundedCornerShape
+        import androidx.compose.material.icons.Icons
+        import androidx.compose.material.icons.filled.*
+        import androidx.compose.material3.*
+        import androidx.compose.runtime.*
+        import androidx.compose.ui.Alignment
+        import androidx.compose.ui.Modifier
+        import androidx.compose.ui.draw.clip
+        import androidx.compose.ui.draw.scale
+        import androidx.compose.ui.graphics.Color
+        import androidx.compose.ui.graphics.graphicsLayer
+        import androidx.compose.ui.input.pointer.pointerInput
+        import androidx.compose.ui.layout.ContentScale
+        import androidx.compose.ui.platform.LocalContext
+        import androidx.compose.ui.text.font.FontWeight
+        import androidx.compose.ui.text.style.TextAlign
+        import androidx.compose.ui.text.style.TextOverflow
+        import androidx.compose.ui.unit.dp
+        import androidx.compose.ui.viewinterop.AndroidView
+        import androidx.core.app.ActivityCompat
+        import androidx.core.content.ContextCompat
+        import androidx.lifecycle.ViewModel
+        import androidx.lifecycle.viewmodel.compose.viewModel
+        import androidx.media3.common.*
+        import androidx.media3.exoplayer.ExoPlayer
+        import androidx.media3.ui.PlayerView
+        import androidx.navigation.NavHostController
+        import androidx.navigation.compose.NavHost
+        import androidx.navigation.compose.composable
+        import androidx.navigation.compose.currentBackStackEntryAsState
+        import androidx.navigation.compose.rememberNavController
+        import coil.compose.AsyncImage
+        import coil.request.ImageRequest
+        import com.google.accompanist.permissions.ExperimentalPermissionsApi
+        import com.google.accompanist.permissions.rememberMultiplePermissionsState
+        import kotlinx.coroutines.*
+        import kotlinx.coroutines.flow.*
+        import java.text.SimpleDateFormat
+        import java.util.*
+        import kotlin.random.Random
+
+        /**
+         * NY Player - Advanced Video Player App
+         * A complete video player with modern Material 3 design
+         */
+
+        // Data models
+        data class VideoFile(
+            val uri: String,
+            val name: String,
+            val duration: Long = 0,
+            val size: Long = 0,
+            val path: String = "",
+            val mimeType: String = ""
+        )
+
+        data class PlayerState(
+            val isPlaying: Boolean = false,
+            val currentPosition: Long = 0,
+            val duration: Long = 0,
+            val currentVideo: VideoFile? = null,
+            val isFullscreen: Boolean = false,
+            val showControls: Boolean = true,
+            val isLoading: Boolean = false,
+            val error: String? = null
+        )
+
+        // Main Activity
+        class MainActivity : ComponentActivity() {
+            
+            private var exoPlayer: ExoPlayer? = null
+            private var playerView: PlayerView? = null
+            
+            override fun onCreate(savedInstanceState: Bundle?) {
+                super.onCreate(savedInstanceState)
+                
+                initializePlayer()
+                handleIntent(intent)
+                
+                setContent {
+                    NYPlayerTheme {
+                        NYPlayerApp()
+                    }
+                }
+            }
+            
+            private fun initializePlayer() {
+                exoPlayer = ExoPlayer.Builder(this)
+                    .setSeekBackIncrementMs(10000)
+                    .setSeekForwardIncrementMs(10000)
+                    .build()
+            }
+            
+            private fun handleIntent(intent: Intent?) {
+                intent?.data?.let { uri ->
+                    playVideo(uri)
+                }
+            }
+            
+            private fun playVideo(uri: Uri) {
+                exoPlayer?.let { player ->
+                    val mediaItem = MediaItem.fromUri(uri)
+                    player.setMediaItem(mediaItem)
+                    player.prepare()
+                    player.play()
+                }
+            }
+            
+            override fun onNewIntent(intent: Intent?) {
+                super.onNewIntent(intent)
+                handleIntent(intent)
+            }
+            
+            override fun onDestroy() {
+                super.onDestroy()
+                exoPlayer?.release()
+            }
+            
+            override fun onPause() {
+                super.onPause()
+                if (!isInPictureInPictureMode) {
+                    exoPlayer?.pause()
+                }
+            }
+            
+            @SuppressLint("NewApi")
+            fun enterPictureInPicture() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val params = PictureInPictureParams.Builder()
+                        .setAspectRatio(Rational(16, 9))
+                        .build()
+                    enterPictureInPictureMode(params)
+                }
+            }
+        }
+
+        // Main App Composable
+        @OptIn(ExperimentalPermissionsApi::class)
+        @Composable
+        fun NYPlayerApp() {
+            val navController = rememberNavController()
+            val viewModel: NYPlayerViewModel = viewModel()
+            
+            val permissionsState = rememberMultiplePermissionsState(
+                permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    listOf(
+                        Manifest.permission.READ_MEDIA_VIDEO,
+                        Manifest.permission.READ_MEDIA_AUDIO
+                    )
+                } else {
+                    listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                }
+            )
+            
+            LaunchedEffect(permissionsState.allPermissionsGranted) {
+                if (permissionsState.allPermissionsGranted) {
+                    viewModel.loadMediaFiles()
+                }
+            }
+            
+            val currentBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentRoute = currentBackStackEntry?.destination?.route
+            
+            Box(modifier = Modifier.fillMaxSize()) {
+                NavHost(
+                    navController = navController,
+                    startDestination = "splash"
+                ) {
+                    composable("splash") {
+                        SplashScreen(navController = navController)
+                    }
+                    
+                    composable("home") {
+                        HomeScreen(
+                            navController = navController,
+                            viewModel = viewModel,
+                            permissionsState = permissionsState
+                        )
+                    }
+                    
+                    composable("player") {
+                        PlayerScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                    
+                    composable("library") {
+                        LibraryScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                    
+                    composable("settings") {
+                        SettingsScreen(
+                            navController = navController,
+                            viewModel = viewModel
+                        )
+                    }
+                }
+                
+                if (currentRoute != "player" && currentRoute != "splash" && viewModel.playerState.value.currentVideo != null) {
+                    MiniPlayer(
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                        viewModel = viewModel,
+                        onTap = { navController.navigate("player") }
+                    )
+                }
+            }
+        }
+
+        // Splash Screen with Animation
+        @Composable
+        fun SplashScreen(navController: NavHostController) {
+            val scale = remember { Animatable(0f) }
+            val alpha = remember { Animatable(0f) }
+            
+            LaunchedEffect(Unit) {
+                launch {
+                    scale.animateTo(
+                        targetValue = 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        )
+                    )
+                }
+                launch {
+                    alpha.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(1000)
+                    )
+                }
+                delay(2500)
+                navController.navigate("home") {
+                    popUpTo("splash") { inclusive = true }
+                }
+            }
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data("https://graph.org/file/3f4620a46dcbb69d218b0-13e5a8d9424946a373.jpg")
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "NY Player Logo",
+                        modifier = Modifier
+                            .size(120.dp)
+                            .scale(scale.value)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Text(
+                        text = "NY PLAYER",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        modifier = Modifier.graphicsLayer(alpha = alpha.value)
+                    )
+                    
+                    Text(
+                        text = "Advanced Video Player",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = Color.White.copy(alpha = 0.8f)
+                        ),
+                        modifier = Modifier.graphicsLayer(alpha = alpha.value)
+                    )
+                }
+            }
+        }
+
+        // Home Screen
+        @OptIn(ExperimentalPermissionsApi::class)
+        @Composable
+        fun HomeScreen(
+            navController: NavHostController,
+            viewModel: NYPlayerViewModel,
+            permissionsState: com.google.accompanist.permissions.MultiplePermissionsState
+        ) {
+            val mediaFiles by viewModel.mediaFiles.collectAsState()
+            
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "NY Player",
+                    style = MaterialTheme.typography.headlineLarge,
+                    modifier = Modifier.padding(vertical = 16.dp)
+                )
+                
+                if (!permissionsState.allPermissionsGranted) {
+                    PermissionRequestCard(permissionsState = permissionsState)
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        contentPadding = PaddingValues(vertical = 16.dp)
+                    ) {
+                        item {
+                            QuickActionsRow(navController = navController, viewModel = viewModel)
+                        }
+                        
+                        item {
+                            Text(
+                                text = "Videos",
+                                style = MaterialTheme.typography.titleLarge,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                        
+                        items(mediaFiles) { file ->
+                            VideoFileItem(
+                                file = file,
+                                onClick = {
+                                    viewModel.playVideo(file)
+                                    navController.navigate("player")
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        @OptIn(ExperimentalPermissionsApi::class)
+        @Composable
+        fun PermissionRequestCard(
+            permissionsState: com.google.accompanist.permissions.MultiplePermissionsState
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Text(
+                        text = "Storage Permission Required",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        textAlign = TextAlign.Center
+                    )
+                    
+                    Text(
+                        text = "NY Player needs access to your device storage to play videos and audio files.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                    
+                    Button(
+                        onClick = { permissionsState.launchMultiplePermissionRequest() },
+                        modifier = Modifier.padding(top = 8.dp)
+                    ) {
+                        Text("Grant Permission")
+                    }
+                }
+            }
+        }
+
+        @Composable
+        fun QuickActionsRow(
+            navController: NavHostController,
+            viewModel: NYPlayerViewModel
+        ) {
+            val filePicker = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument()
+            ) { uri ->
+                uri?.let {
+                    viewModel.openFile(it)
+                    navController.navigate("player")
+                }
+            }
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                QuickActionButton(
+                    icon = Icons.Default.FolderOpen,
+                    label = "Open File",
+                    onClick = { 
+                        filePicker.launch(arrayOf("video/*", "audio/*"))
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                
+                QuickActionButton(
+                    icon = Icons.Default.VideoLibrary,
+                    label = "Library",
+                    onClick = { navController.navigate("library") },
+                    modifier = Modifier.weight(1f)
+                )
+                
+                QuickActionButton(
+                    icon = Icons.Default.Settings,
+                    label = "Settings",
+                    onClick = { navController.navigate("settings") },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        @Composable
+        fun QuickActionButton(
+            icon: androidx.compose.ui.graphics.vector.ImageVector,
+            label: String,
+            onClick: () -> Unit,
+            modifier: Modifier = Modifier
+        ) {
+            Card(
+                modifier = modifier
+                    .aspectRatio(1f)
+                    .clickable { onClick() },
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = label,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        @Composable
+        fun VideoFileItem(
+            file: VideoFile,
+            onClick: () -> Unit
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onClick() }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.VideoFile,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.width(12.dp))
+                    
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = file.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        
+                        Text(
+                            text = formatDuration(file.duration),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    
+                    IconButton(onClick = { /* Options */ }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More")
+                    }
+                }
+            }
+        }
+
+        // Player Screen
+        @Composable
+        fun PlayerScreen(
+            navController: NavHostController,
+            viewModel: NYPlayerViewModel
+        ) {
+            val context = LocalContext.current as MainActivity
+            val playerState by viewModel.playerState.collectAsState()
+            
+            Box(modifier = Modifier.fillMaxSize()) {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            player = context.exoPlayer
+                            useController = false
+                            context.playerView = this
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+                
+                PlayerControlsOverlay(
+                    viewModel = viewModel,
+                    onBack = { navController.navigateUp() },
+                    onPiP = { context.enterPictureInPicture() }
+                )
+            }
+        }
+
+        @Composable
+        fun PlayerControlsOverlay(
+            viewModel: NYPlayerViewModel,
+            onBack: () -> Unit,
+            onPiP: () -> Unit
+        ) {
+            val playerState by viewModel.playerState.collectAsState()
+            var showControls by remember { mutableStateOf(true) }
+            
+            LaunchedEffect(showControls, playerState.isPlaying) {
+                if (showControls && playerState.isPlaying) {
+                    delay(3000)
+                    showControls = false
+                }
+            }
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable { showControls = !showControls }
+            ) {
+                AnimatedVisibility(
+                    visible = showControls,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Top bar
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    Icons.Default.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = Color.White
+                                )
+                            }
+                            
+                            Text(
+                                text = playerState.currentVideo?.name ?: "",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                IconButton(onClick = onPiP) {
+                                    Icon(
+                                        Icons.Default.PictureInPictureAlt,
+                                        contentDescription = "Picture in Picture",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // Center play button
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .size(80.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                .clickable { viewModel.togglePlayPause() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (playerState.isPlaying) "Pause" else "Play",
+                                tint = Color.White,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        @Composable
+        fun MiniPlayer(
+            modifier: Modifier = Modifier,
+            viewModel: NYPlayerViewModel,
+            onTap: () -> Unit
+        ) {
+            val playerState by viewModel.playerState.collectAsState()
+            
+            Card(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .clickable { onTap() },
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.VideoFile,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.width(12.dp))
+                    
+                    Text(
+                        text = playerState.currentVideo?.name ?: "Unknown",
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    IconButton(onClick = { viewModel.togglePlayPause() }) {
+                        Icon(
+                            if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (playerState.isPlaying) "Pause" else "Play"
+                        )
+                    }
+                    
+                    IconButton(onClick = { viewModel.stopPlayback() }) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+            }
+        }
+
+        // Library Screen (simplified)
+        @Composable
+        fun LibraryScreen(navController: NavHostController, viewModel: NYPlayerViewModel) {
+            val mediaFiles by viewModel.mediaFiles.collectAsState()
+            
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                    Text(
+                        text = "Library",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                }
+                
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(mediaFiles) { file ->
+                        VideoFileItem(
+                            file = file,
+                            onClick = {
+                                viewModel.playVideo(file)
+                                navController.navigate("player")
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Settings Screen (simplified)
+        @Composable
+        fun SettingsScreen(navController: NavHostController, viewModel: NYPlayerViewModel) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                    Text(
+                        text = "Settings",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                }
+                
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Text(
+                                    text = "About NY Player",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = "Advanced Video Player v1.0",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ViewModel
+        class NYPlayerViewModel : ViewModel() {
+            private val _playerState = MutableStateFlow(PlayerState())
+            val playerState: StateFlow<PlayerState> = _playerState.asStateFlow()
+            
+            private val _mediaFiles = MutableStateFlow<List<VideoFile>>(emptyList())
+            val mediaFiles: StateFlow<List<VideoFile>> = _mediaFiles.asStateFlow()
+            
+            fun loadMediaFiles() {
+                // Simplified - would normally query MediaStore
+                _mediaFiles.value = listOf(
+                    VideoFile("", "Sample Video 1", 120000, 1024000, "", "video/mp4"),
+                    VideoFile("", "Sample Video 2", 180000, 2048000, "", "video/mp4")
+                )
+            }
+            
+            fun playVideo(file: VideoFile) {
+                _playerState.value = _playerState.value.copy(
+                    currentVideo = file,
+                    isPlaying = true
+                )
+            }
+            
+            fun togglePlayPause() {
+                _playerState.value = _playerState.value.copy(
+                    isPlaying = !_playerState.value.isPlaying
+                )
+            }
+            
+            fun stopPlayback() {
+                _playerState.value = _playerState.value.copy(
+                    currentVideo = null,
+                    isPlaying = false
+                )
+            }
+            
+            fun openFile(uri: Uri) {
+                val file = VideoFile(
+                    uri = uri.toString(),
+                    name = uri.lastPathSegment ?: "Unknown",
+                    duration = 0,
+                    size = 0,
+                    path = uri.path ?: "",
+                    mimeType = "video/*"
+                )
+                playVideo(file)
+            }
+        }
+
+        // Utility functions
+        fun formatDuration(milliseconds: Long): String {
+            val totalSeconds = milliseconds / 1000
+            val hours = totalSeconds / 3600
+            val minutes = (totalSeconds % 3600) / 60
+            val seconds = totalSeconds % 60
+            
+            return if (hours > 0) {
+                String.format("%d:%02d:%02d", hours, minutes, seconds)
+            } else {
+                String.format("%d:%02d", minutes, seconds)
+            }
+        }
+
+        // Theme
+        @Composable
+        fun NYPlayerTheme(content: @Composable () -> Unit) {
+            MaterialTheme(
+                colorScheme = if (isSystemInDarkTheme()) {
+                    darkColorScheme(primary = Color(0xFF6200EE))
+                } else {
+                    lightColorScheme(primary = Color(0xFF6200EE))
+                },
+                content = content
+            )
+        }
+        EOFRational
         import android.view.View
         import android.view.WindowInsets
         import android.view.WindowInsetsController
