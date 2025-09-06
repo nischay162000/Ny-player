@@ -2215,7 +2215,7 @@ jobs:
         asset_name: ny-player-release-v1.0.${{ github.run_number }}.apk
         asset_content_type: application/vnd.android.package-archive
 
-  # Optional: Notification job
+  # Notification job
   notify:
     runs-on: ubuntu-latest
     needs: build
@@ -2224,7 +2224,6 @@ jobs:
     - name: Build Status
       run: |
         echo "🎬 NY Player Build Complete!"
-        echo "✅ Debug APK: Ready for download"
         echo "✅ Release APK: Ready for download"
         echo ""
         echo "📱 To install:"
