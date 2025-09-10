@@ -52,19 +52,62 @@ jobs:
         zipStorePath=wrapper/dists
         EOF
         
-        # Download gradle wrapper
-        curl -L -o gradle-wrapper.jar https://github.com/gradle/gradle/raw/master/gradle/wrapper/gradle-wrapper.jar
-        mv gradle-wrapper.jar gradle/wrapper/
+        # Create basic gradle wrapper files
+        cat > gradlew << 'EOF'
+        #!/usr/bin/env sh
         
-        # Create gradlew scripts
-        curl -L -o gradlew https://github.com/gradle/gradle/raw/master/gradlew
-        curl -L -o gradlew.bat https://github.com/gradle/gradle/raw/master/gradlew.bat
+        # Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+        
+        ##############################################################################
+        ##
+        ##  Gradle start up script for UN*X
+        ##
+        ##############################################################################
+        
+        # Resolve links: $0 may be a link
+        PRG="$0"
+        # Need this for relative symlinks.
+        while [ -h "$PRG" ] ; do
+            ls=`ls -ld "$PRG"`
+            link=`expr "$ls" : '.*-> \(.*\)$'`
+            if expr "$link" : '/.*' > /dev/null; then
+                PRG="$link"
+            else
+                PRG=`dirname "$PRG"`"/$link"
+            fi
+        done
+        SAVED="`pwd`"
+        cd "`dirname \"$PRG\"`/" >/dev/null
+        APP_HOME="`pwd -P`"
+        cd "$SAVED" >/dev/null
+        
+        APP_NAME="Gradle"
+        APP_BASE_NAME=`basename "$0"`
+        
+        exec "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "$@"
+        EOF
+        
+        # Make gradlew executable
         chmod +x gradlew
+        
+        # Create basic gradle-wrapper.jar placeholder
+        # We'll use a simple approach with wget/curl to get the actual wrapper
+        mkdir -p gradle/wrapper
+        
+        # Download actual gradle wrapper jar
+        curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.0.0/gradle/wrapper/gradle-wrapper.jar || \
+        wget -O gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.0.0/gradle/wrapper/gradle-wrapper.jar || \
+        echo "Warning: Could not download gradle-wrapper.jar"
         
         # Create root build.gradle
         cat > build.gradle << 'EOF'
         buildscript {
             ext.kotlin_version = "1.9.10"
+            repositories {
+                google()
+                mavenCentral()
+                gradlePluginPortal()
+            }
             dependencies {
                 classpath 'com.android.tools.build:gradle:8.1.2'
                 classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -74,7 +117,12 @@ jobs:
             repositories {
                 google()
                 mavenCentral()
+                maven { url 'https://jitpack.io' }
             }
+        }
+        
+        task clean(type: Delete) {
+            delete rootProject.buildDir
         }
         EOF
         
@@ -101,10 +149,18 @@ jobs:
                 targetSdk 34
                 versionCode 1
                 versionName "1.0.0"
+                
+                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
             }
             
             buildTypes {
+                debug {
+                    debuggable true
+                    minifyEnabled false
+                    applicationIdSuffix ".debug"
+                }
                 release {
+                    debuggable false
                     minifyEnabled true
                     shrinkResources true
                     proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -123,6 +179,12 @@ jobs:
             buildFeatures {
                 viewBinding true
             }
+            
+            packagingOptions {
+                resources {
+                    excludes += '/META-INF/{AL2.0,LGPL2.1}'
+                }
+            }
         }
         
         dependencies {
@@ -137,6 +199,8 @@ jobs:
             implementation 'androidx.camera:camera-camera2:1.3.0'
             implementation 'androidx.camera:camera-lifecycle:1.3.0'
             implementation 'androidx.camera:camera-view:1.3.0'
+            implementation 'androidx.fragment:fragment-ktx:1.6.1'
+            implementation 'androidx.activity:activity-ktx:1.8.0'
         }
         EOF
         
@@ -707,14 +771,21 @@ jobs:
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
             <uses-permission android:name="android.permission.CAMERA" />
             <uses-permission android:name="android.permission.RECORD_AUDIO" />
-            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+                android:maxSdkVersion="28" />
+            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
+                android:maxSdkVersion="32" />
+            <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+            <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
             <uses-permission android:name="android.permission.USE_BIOMETRIC" />
             <uses-permission android:name="android.permission.USE_FINGERPRINT" />
             <uses-permission android:name="android.permission.VIBRATE" />
+            <uses-permission android:name="android.permission.WAKE_LOCK" />
             
             <application
                 android:allowBackup="true"
+                android:dataExtractionRules="@xml/data_extraction_rules"
+                android:fullBackupContent="@xml/backup_rules"
                 android:icon="@mipmap/ic_launcher"
                 android:label="${{ github.event.inputs.app_name }}"
                 android:roundIcon="@mipmap/ic_launcher_round"
@@ -723,7 +794,30 @@ jobs:
                 android:hardwareAccelerated="true"
                 android:largeHeap="true"
                 android:supportsRtl="true"
+                android:networkSecurityConfig="@xml/network_security_config"
                 tools:targetApi="31">
+                
+                <activity
+                    android:name=".SplashActivity"
+                    android:exported="true"
+                    android:screenOrientation="portrait"
+                    android:theme="@style/Theme.NYBotsApp.Splash">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+                
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="false"
+                    android:configChanges="orientation|keyboardHidden|screenSize"
+                    android:hardwareAccelerated="true"
+                    android:launchMode="singleTop" />
+                    
+            </application>
+        </manifest>
+        EOF
                 
                 <activity
                     android:name=".SplashActivity"
@@ -795,80 +889,30 @@ jobs:
       run: |
         cd android-app
         
-        # Create launcher icons using the vector drawable
-        for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            # Copy the vector drawable as launcher icons
-            cat > app/src/main/res/mipmap-$density/ic_launcher.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <vector xmlns:android="http://schemas.android.com/apk/res/android"
-            android:width="48dp"
-            android:height="48dp"
-            android:viewportWidth="120"
-            android:viewportHeight="120">
-            
-            <!-- Background circle -->
-            <path android:fillColor="#667eea"
-                  android:pathData="M60,5 A55,55 0 1,1 59.999,5 Z" />
-            
-            <!-- Inner circle -->
-            <path android:fillColor="#ffffff"
-                  android:pathData="M60,15 A45,45 0 1,1 59.999,15 Z" />
-            
-            <!-- NY Text -->
-            <path android:fillColor="#667eea"
-                  android:pathData="M30,40 L38,40 L38,65 L48,40 L56,40 L48,65 L38,65 Z" />
-            
-            <!-- BOTS circuit pattern -->
-            <path android:fillColor="#f093fb"
-                  android:pathData="M65,45 L90,45 L90,48 L65,48 Z" />
-            <path android:fillColor="#f093fb"
-                  android:pathData="M65,52 L85,52 L85,55 L65,55 Z" />
-            <path android:fillColor="#f093fb"
-                  android:pathData="M65,59 L88,59 L88,62 L65,62 Z" />
-                  
-            <!-- Circuit dots -->
-            <circle android:fillColor="#764ba2" android:cx="70" android:cy="46.5" android:r="1.5"/>
-            <circle android:fillColor="#764ba2" android:cx="78" android:cy="53.5" android:r="1.5"/>
-            <circle android:fillColor="#764ba2" android:cx="75" android:cy="60.5" android:r="1.5"/>
-        </vector>
-        EOF
-            
-            # Round launcher icon
-            cat > app/src/main/res/mipmap-$density/ic_launcher_round.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <vector xmlns:android="http://schemas.android.com/apk/res/android"
-            android:width="48dp"
-            android:height="48dp"
-            android:viewportWidth="120"
-            android:viewportHeight="120">
-            
-            <!-- Background circle -->
-            <path android:fillColor="#667eea"
-                  android:pathData="M60,5 A55,55 0 1,1 59.999,5 Z" />
-            
-            <!-- Inner circle -->
-            <path android:fillColor="#ffffff"
-                  android:pathData="M60,15 A45,45 0 1,1 59.999,15 Z" />
-            
-            <!-- NY Text -->
-            <path android:fillColor="#667eea"
-                  android:pathData="M30,40 L38,40 L38,65 L48,40 L56,40 L48,65 L38,65 Z" />
-            
-            <!-- BOTS circuit pattern -->
-            <path android:fillColor="#f093fb"
-                  android:pathData="M65,45 L90,45 L90,48 L65,48 Z" />
-            <path android:fillColor="#f093fb"
-                  android:pathData="M65,52 L85,52 L85,55 L65,55 Z" />
-            <path android:fillColor="#f093fb"
-                  android:pathData="M65,59 L88,59 L88,62 L65,62 Z" />
-                  
-            <!-- Circuit dots -->
-            <circle android:fillColor="#764ba2" android:cx="70" android:cy="46.5" android:r="1.5"/>
-            <circle android:fillColor="#764ba2" android:cx="78" android:cy="53.5" android:r="1.5"/>
-            <circle android:fillColor="#764ba2" android:cx="75" android:cy="60.5" android:r="1.5"/>
-        </vector>
-        EOF
+        # Create simple PNG launcher icons using ImageMagick
+        # Install ImageMagick first
+        sudo apt-get update && sudo apt-get install -y imagemagick
+        
+        # Create a simple icon using ImageMagick
+        convert -size 192x192 xc:"#667eea" \
+                -fill white -font DejaVu-Sans-Bold -pointsize 60 \
+                -gravity center -annotate +0+0 'NY' \
+                -fill "#f093fb" -font DejaVu-Sans -pointsize 32 \
+                -gravity center -annotate +0+40 'BOTS' \
+                temp_icon.png
+        
+        # Create different density versions
+        declare -A densities=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
+        
+        for density in "${!densities[@]}"; do
+            size=${densities[$density]}
+            convert temp_icon.png -resize ${size}x${size} app/src/main/res/mipmap-$density/ic_launcher.png
+            # Create round version (same image for now)
+            cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
         done
+        
+        # Clean up temp file
+        rm temp_icon.png
         
         # Create network security config
         cat > app/src/main/res/xml/network_security_config.xml << 'EOF'
@@ -886,6 +930,27 @@ jobs:
                 </trust-anchors>
             </base-config>
         </network-security-config>
+        EOF
+        
+        # Create backup rules
+        cat > app/src/main/res/xml/backup_rules.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <full-backup-content>
+            <exclude domain="sharedpref" path="device_prefs.xml"/>
+        </full-backup-content>
+        EOF
+        
+        # Create data extraction rules
+        cat > app/src/main/res/xml/data_extraction_rules.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <data-extraction-rules>
+            <cloud-backup>
+                <exclude domain="sharedpref" path="device_prefs.xml"/>
+            </cloud-backup>
+            <device-transfer>
+                <exclude domain="sharedpref" path="device_prefs.xml"/>
+            </device-transfer>
+        </data-extraction-rules>
         EOF
         
         # Create proguard rules
