@@ -24,6 +24,15 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      
     - name: Create Android Project Structure
       run: |
         # Create project directories
@@ -31,18 +40,8 @@ jobs:
         mkdir -p android-app/gradle/wrapper
         cd android-app
         
-        # Create Gradle Wrapper
-        cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-        distributionBase=GRADLE_USER_HOME
-        distributionPath=wrapper/dists
-        distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-bin.zip
-        zipStoreBase=GRADLE_USER_HOME
-        zipStorePath=wrapper/dists
-        EOF
-        
-        # Create gradlew
-        curl -s https://raw.githubusercontent.com/gradle/gradle/master/gradlew -o gradlew
-        curl -s https://raw.githubusercontent.com/gradle/gradle/master/gradlew.bat -o gradlew.bat
+        # Initialize Gradle wrapper using system Gradle
+        gradle wrapper --gradle-version 8.0
         chmod +x gradlew
         
         # Create root build.gradle
@@ -89,8 +88,7 @@ jobs:
             
             buildTypes {
                 release {
-                    minifyEnabled true
-                    shrinkResources true
+                    minifyEnabled false
                     proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
                 }
             }
@@ -118,90 +116,36 @@ jobs:
             implementation 'androidx.webkit:webkit:1.8.0'
             implementation 'com.airbnb.android:lottie:6.1.0'
             implementation 'androidx.biometric:biometric:1.1.0'
-            implementation 'androidx.camera:camera-camera2:1.3.0'
-            implementation 'androidx.camera:camera-lifecycle:1.3.0'
-            implementation 'androidx.camera:camera-view:1.3.0'
-        }
-        EOF
-
-        
-        # Create settings.gradle
-        cat > settings.gradle << 'EOF'
-        include ':app'
-        rootProject.name = "NYBotsApp"
-        EOF
-        
-        # Create app build.gradle
-        cat > app/build.gradle << 'EOF'
-        plugins {
-            id 'com.android.application'
-            id 'org.jetbrains.kotlin.android'
-        }
-        
-        android {
-            namespace '${{ github.event.inputs.package_name }}'
-            compileSdk 34
-            
-            defaultConfig {
-                applicationId "${{ github.event.inputs.package_name }}"
-                minSdk 24
-                targetSdk 34
-                versionCode 1
-                versionName "1.0.0"
-            }
-            
-            buildTypes {
-                release {
-                    minifyEnabled true
-                    shrinkResources true
-                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-                }
-            }
-            
-            compileOptions {
-                sourceCompatibility JavaVersion.VERSION_1_8
-                targetCompatibility JavaVersion.VERSION_1_8
-            }
-            
-            kotlinOptions {
-                jvmTarget = '1.8'
-            }
-            
-            buildFeatures {
-                viewBinding true
-            }
-        }
-        
-        dependencies {
-            implementation 'androidx.core:core-ktx:1.12.0'
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.10.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-            implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
-            implementation 'androidx.webkit:webkit:1.8.0'
-            implementation 'com.airbnb.android:lottie:6.1.0'
-            implementation 'androidx.biometric:biometric:1.1.0'
-            implementation 'androidx.camera:camera-camera2:1.3.0'
-            implementation 'androidx.camera:camera-lifecycle:1.3.0'
-            implementation 'androidx.camera:camera-view:1.3.0'
         }
         EOF
         
-    - name: Create Advanced MainActivity
+        # Create gradle.properties
+        cat > gradle.properties << 'EOF'
+        android.useAndroidX=true
+        android.enableJetifier=true
+        org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
+        org.gradle.parallel=true
+        org.gradle.configureondemand=true
+        org.gradle.daemon=true
+        org.gradle.caching=true
+        android.enableR8.fullMode=true
+        EOF
+        
+    - name: Create Activities and Kotlin Files
       run: |
         cd android-app
+        
+        # Create MainActivity.kt
         cat > app/src/main/java/com/nybots/app/MainActivity.kt << 'EOF'
         package com.nybots.app
         
         import android.Manifest
         import android.content.Intent
-        import android.content.pm.PackageManager
         import android.graphics.Bitmap
         import android.net.Uri
         import android.os.Bundle
         import android.os.Handler
         import android.os.Looper
-        import android.provider.MediaStore
         import android.view.KeyEvent
         import android.view.View
         import android.view.WindowManager
@@ -215,7 +159,6 @@ jobs:
         import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
         import androidx.webkit.WebSettingsCompat
         import androidx.webkit.WebViewFeature
-        import java.io.File
         
         class MainActivity : AppCompatActivity() {
             
@@ -244,7 +187,6 @@ jobs:
             override fun onCreate(savedInstanceState: Bundle?) {
                 super.onCreate(savedInstanceState)
                 
-                // Enable hardware acceleration and secure content
                 window.setFlags(
                     WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
                     WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
@@ -271,8 +213,6 @@ jobs:
                     databaseEnabled = true
                     allowFileAccess = true
                     allowContentAccess = true
-                    allowFileAccessFromFileURLs = true
-                    allowUniversalAccessFromFileURLs = true
                     loadWithOverviewMode = true
                     useWideViewPort = true
                     setSupportZoom(true)
@@ -283,26 +223,21 @@ jobs:
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     cacheMode = WebSettings.LOAD_DEFAULT
                     setGeolocationEnabled(true)
-                    setSupportMultipleWindows(true)
                     userAgentString = "NYBotsApp/1.0 " + userAgentString
                 }
                 
-                // Enable dark mode support
                 if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
                     WebSettingsCompat.setForceDark(webView.settings, WebSettingsCompat.FORCE_DARK_AUTO)
                 }
                 
                 webView.webViewClient = AdvancedWebViewClient()
                 webView.webChromeClient = AdvancedWebChromeClient()
-                
-                // Add JavaScript interface for native features
                 webView.addJavaScriptInterface(NativeInterface(), "NativeApp")
                 
                 swipeRefresh.setOnRefreshListener {
                     webView.reload()
                 }
                 
-                // Enable pull-to-refresh with custom colors
                 swipeRefresh.setColorSchemeResources(
                     android.R.color.holo_blue_bright,
                     android.R.color.holo_green_light,
@@ -330,7 +265,6 @@ jobs:
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val url = request?.url.toString()
                     
-                    // Handle external links
                     if (!url.contains(Uri.parse(APP_URL).host ?: "")) {
                         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                         return true
@@ -348,31 +282,6 @@ jobs:
                     super.onPageFinished(view, url)
                     progressBar.visibility = View.GONE
                     swipeRefresh.isRefreshing = false
-                    
-                    // Inject custom CSS for native feel
-                    view?.evaluateJavascript("""
-                        (function() {
-                            var style = document.createElement('style');
-                            style.innerHTML = `
-                                * { 
-                                    -webkit-touch-callout: none; 
-                                    -webkit-user-select: none; 
-                                    user-select: none; 
-                                }
-                                body { 
-                                    -webkit-overflow-scrolling: touch;
-                                    overscroll-behavior: contain;
-                                }
-                                .native-app-hidden { display: none !important; }
-                            `;
-                            document.head.appendChild(style);
-                        })();
-                    """, null)
-                }
-                
-                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                    super.onReceivedError(view, request, error)
-                    // Show offline page or retry mechanism
                 }
             }
             
@@ -417,35 +326,6 @@ jobs:
             
             private inner class NativeInterface {
                 @JavascriptInterface
-                fun showBiometric() {
-                    runOnUiThread {
-                        val biometricManager = BiometricManager.from(this@MainActivity)
-                        if (biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS) {
-                            val biometricPrompt = BiometricPrompt(this@MainActivity as androidx.fragment.app.FragmentActivity,
-                                ContextCompat.getMainExecutor(this@MainActivity),
-                                object : BiometricPrompt.AuthenticationCallback() {
-                                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                                        webView.evaluateJavascript("window.biometricSuccess && window.biometricSuccess();", null)
-                                    }
-                                })
-                            
-                            val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                                .setTitle("Biometric Authentication")
-                                .setSubtitle("Use your biometric credential to authenticate")
-                                .setNegativeButtonText("Cancel")
-                                .build()
-                            
-                            biometricPrompt.authenticate(promptInfo)
-                        }
-                    }
-                }
-                
-                @JavascriptInterface
-                fun vibrate(duration: Long) {
-                    // Haptic feedback
-                }
-                
-                @JavascriptInterface
                 fun getDeviceInfo(): String {
                     return """{"platform": "android", "version": "1.0.0", "device": "native"}"""
                 }
@@ -471,9 +351,7 @@ jobs:
         }
         EOF
         
-    - name: Create Splash Activity
-      run: |
-        cd android-app
+        # Create SplashActivity.kt
         cat > app/src/main/java/com/nybots/app/SplashActivity.kt << 'EOF'
         package com.nybots.app
         
@@ -488,9 +366,6 @@ jobs:
         import android.widget.ImageView
         import android.widget.TextView
         import androidx.appcompat.app.AppCompatActivity
-        import androidx.core.view.ViewCompat
-        import androidx.core.view.WindowInsetsCompat
-        import com.airbnb.lottie.LottieAnimationView
         
         class SplashActivity : AppCompatActivity() {
             
@@ -498,7 +373,6 @@ jobs:
                 super.onCreate(savedInstanceState)
                 setContentView(R.layout.activity_splash)
                 
-                // Hide system UI for immersive experience
                 window.decorView.systemUiVisibility = (
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                     or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -516,7 +390,6 @@ jobs:
                 val title = findViewById<TextView>(R.id.titleText)
                 val subtitle = findViewById<TextView>(R.id.subtitleText)
                 
-                // Initial state
                 logo.alpha = 0f
                 logo.scaleX = 0.5f
                 logo.scaleY = 0.5f
@@ -525,7 +398,6 @@ jobs:
                 subtitle.alpha = 0f
                 subtitle.translationY = 30f
                 
-                // Animate logo
                 val logoAnimator = AnimatorSet().apply {
                     playTogether(
                         ObjectAnimator.ofFloat(logo, "alpha", 0f, 1f),
@@ -537,7 +409,6 @@ jobs:
                     interpolator = AccelerateDecelerateInterpolator()
                 }
                 
-                // Animate title
                 val titleAnimator = AnimatorSet().apply {
                     playTogether(
                         ObjectAnimator.ofFloat(title, "alpha", 0f, 1f),
@@ -548,7 +419,6 @@ jobs:
                     interpolator = AccelerateDecelerateInterpolator()
                 }
                 
-                // Animate subtitle
                 val subtitleAnimator = AnimatorSet().apply {
                     playTogether(
                         ObjectAnimator.ofFloat(subtitle, "alpha", 0f, 1f),
@@ -563,7 +433,6 @@ jobs:
                 titleAnimator.start()
                 subtitleAnimator.start()
                 
-                // Navigate to main activity
                 Handler(Looper.getMainLooper()).postDelayed({
                     startActivity(Intent(this, MainActivity::class.java))
                     overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
@@ -628,14 +497,6 @@ jobs:
                 app:layout_constraintTop_toBottomOf="@id/titleText"
                 app:layout_constraintBottom_toBottomOf="parent" />
         
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="4dp"
-                android:background="@drawable/loading_progress"
-                android:layout_marginHorizontal="48dp"
-                android:layout_marginBottom="48dp"
-                app:layout_constraintBottom_toBottomOf="parent" />
-        
         </androidx.constraintlayout.widget.ConstraintLayout>
         EOF
         
@@ -685,17 +546,7 @@ jobs:
         </shape>
         EOF
         
-        cat > app/src/main/res/drawable/loading_progress.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <animation-list xmlns:android="http://schemas.android.com/apk/res/android" android:oneshot="false">
-            <item android:drawable="@drawable/progress_frame1" android:duration="150" />
-            <item android:drawable="@drawable/progress_frame2" android:duration="150" />
-            <item android:drawable="@drawable/progress_frame3" android:duration="150" />
-            <item android:drawable="@drawable/progress_frame2" android:duration="150" />
-        </animation-list>
-        EOF
-        
-        # Create NY BOTS logo (simple vector)
+        # Create NY BOTS logo
         cat > app/src/main/res/drawable/ny_bots_logo.xml << 'EOF'
         <vector xmlns:android="http://schemas.android.com/apk/res/android"
             android:width="120dp"
@@ -703,42 +554,30 @@ jobs:
             android:viewportWidth="120"
             android:viewportHeight="120">
             
-            <group android:scaleX="1.2" android:scaleY="1.2" android:pivotX="60" android:pivotY="60">
-                <!-- Background circle -->
-                <path android:fillColor="#ffffff"
-                      android:pathData="M60,10 A50,50 0 1,1 59.999,10 Z" />
-                
-                <!-- NY Text -->
-                <path android:fillColor="#667eea"
-                      android:pathData="M25,35 L35,35 L35,65 L45,35 L55,35 L45,65 L35,65 Z" />
-                
-                <!-- BOTS circuit pattern -->
-                <path android:fillColor="#f093fb"
-                      android:pathData="M65,40 L95,40 L95,45 L65,45 Z" />
-                <path android:fillColor="#f093fb"
-                      android:pathData="M65,50 L85,50 L85,55 L65,55 Z" />
-                <path android:fillColor="#f093fb"
-                      android:pathData="M65,60 L90,60 L90,65 L65,65 Z" />
-                      
-                <!-- Circuit dots -->
-                <circle android:fillColor="#764ba2" android:cx="70" android:cy="42.5" android:r="2"/>
-                <circle android:fillColor="#764ba2" android:cx="80" android:cy="52.5" android:r="2"/>
-                <circle android:fillColor="#764ba2" android:cx="75" android:cy="62.5" android:r="2"/>
-            </group>
+            <!-- Background circle -->
+            <path android:fillColor="#ffffff"
+                  android:pathData="M60,10 A50,50 0 1,1 59.999,10 Z" />
+            
+            <!-- NY Text -->
+            <path android:fillColor="#667eea"
+                  android:pathData="M25,35 L35,35 L35,65 L45,35 L55,35 L45,65 L35,65 Z" />
+            
+            <!-- BOTS circuit pattern -->
+            <path android:fillColor="#f093fb"
+                  android:pathData="M65,40 L95,40 L95,45 L65,45 Z" />
+            <path android:fillColor="#f093fb"
+                  android:pathData="M65,50 L85,50 L85,55 L65,55 Z" />
+            <path android:fillColor="#f093fb"
+                  android:pathData="M65,60 L90,60 L90,65 L65,65 Z" />
+                  
+            <!-- Circuit dots -->
+            <circle android:fillColor="#764ba2" android:cx="70" android:cy="42.5" android:r="2"/>
+            <circle android:fillColor="#764ba2" android:cx="80" android:cy="52.5" android:r="2"/>
+            <circle android:fillColor="#764ba2" android:cx="75" android:cy="62.5" android:r="2"/>
         </vector>
         EOF
         
-        # Create progress frames
-        for i in {1..3}; do
-            cat > app/src/main/res/drawable/progress_frame$i.xml << EOF
-        <shape xmlns:android="http://schemas.android.com/apk/res/android">
-            <solid android:color="#$(printf '%02x' $((255 - i * 50)))$(printf '%02x' $((100 + i * 50)))$(printf '%02x' $((200 + i * 18)))" />
-            <corners android:radius="2dp" />
-        </shape>
-        EOF
-        done
-        
-    - name: Create Manifest and Config Files
+    - name: Create Configuration Files
       run: |
         cd android-app
         
@@ -754,17 +593,13 @@ jobs:
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
             <uses-permission android:name="android.permission.CAMERA" />
             <uses-permission android:name="android.permission.RECORD_AUDIO" />
-            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
             <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-            <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-            <uses-permission android:name="android.permission.USE_FINGERPRINT" />
             <uses-permission android:name="android.permission.VIBRATE" />
             
             <application
                 android:allowBackup="true"
-                android:icon="@mipmap/ic_launcher"
+                android:icon="@drawable/ny_bots_logo"
                 android:label="${{ github.event.inputs.app_name }}"
-                android:roundIcon="@mipmap/ic_launcher_round"
                 android:theme="@style/Theme.NYBotsApp"
                 android:usesCleartextTraffic="true"
                 android:hardwareAccelerated="true"
@@ -838,35 +673,6 @@ jobs:
         </resources>
         EOF
         
-    - name: Create App Icons
-      run: |
-        cd android-app
-        
-        # Create launcher icon (simple vector for all densities)
-        for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-            cp app/src/main/res/drawable/ny_bots_logo.xml app/src/main/res/mipmap-$density/ic_launcher.xml
-            cp app/src/main/res/drawable/ny_bots_logo.xml app/src/main/res/mipmap-$density/ic_launcher_round.xml
-        done
-        
-        # Create network security config
-        mkdir -p app/src/main/res/xml
-        cat > app/src/main/res/xml/network_security_config.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <network-security-config>
-            <domain-config cleartextTrafficPermitted="true">
-                <domain includeSubdomains="true">localhost</domain>
-                <domain includeSubdomains="true">127.0.0.1</domain>
-                <domain includeSubdomains="true">10.0.2.2</domain>
-            </domain-config>
-            <base-config cleartextTrafficPermitted="true">
-                <trust-anchors>
-                    <certificates src="system"/>
-                    <certificates src="user"/>
-                </trust-anchors>
-            </base-config>
-        </network-security-config>
-        EOF
-        
         # Create proguard rules
         cat > app/proguard-rules.pro << 'EOF'
         -keepattributes *Annotation*
@@ -883,27 +689,6 @@ jobs:
         -keep class com.nybots.app.** { *; }
         EOF
         
-        # Create gradle.properties
-        cat > gradle.properties << 'EOF'
-        android.useAndroidX=true
-        android.enableJetifier=true
-        org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
-        org.gradle.parallel=true
-        org.gradle.configureondemand=true
-        org.gradle.daemon=true
-        org.gradle.caching=true
-        android.enableR8.fullMode=true
-        EOF
-        
-    - name: Setup Android SDK and Build Environment
-      uses: android-actions/setup-android@v3
-      
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        
     - name: Cache Gradle Dependencies
       uses: actions/cache@v3
       with:
@@ -914,48 +699,42 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-gradle-
           
-    - name: Make Gradlew Executable
+    - name: Build Project
       run: |
         cd android-app
         chmod +x gradlew
-        
-    - name: Clean Project
-      run: |
-        cd android-app
         ./gradlew clean
-        
-    - name: Build Debug APK
-      run: |
-        cd android-app
         ./gradlew assembleDebug --stacktrace
-        
-    - name: Build Release APK
-      run: |
-        cd android-app
         ./gradlew assembleRelease --stacktrace
-        
-    - name: Create Self-Signed Keystore
-      run: |
-        cd android-app
-        keytool -genkey -v -keystore app-release-key.keystore -alias app-key -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=NY BOTS, OU=Mobile, O=NY BOTS, L=New York, S=NY, C=US"
         
     - name: Sign Release APK
       run: |
         cd android-app
-        jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore app-release-key.keystore -storepass android -keypass android app/build/outputs/apk/release/app-release-unsigned.apk app-key
-        $ANDROID_HOME/build-tools/34.0.0/zipalign -v 4 app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/app-release-signed.apk
+        keytool -genkey -v -keystore app-release-key.keystore -alias app-key -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=NY BOTS, OU=Mobile, O=NY BOTS, L=New York, S=NY, C=US"
         
-    - name: Rename APKs
+        if [ -f "app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore app-release-key.keystore -storepass android -keypass android app/build/outputs/apk/release/app-release-unsigned.apk app-key
+          $ANDROID_HOME/build-tools/34.0.0/zipalign -v 4 app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/app-release-signed.apk
+        fi
+        
+    - name: Prepare APKs for Upload
       run: |
         cd android-app
         APP_NAME="${{ github.event.inputs.app_name }}"
         CLEAN_NAME=$(echo "$APP_NAME" | tr ' ' '_' | tr -cd '[:alnum:]_')
         
         # Copy and rename APKs
-        cp app/build/outputs/apk/debug/app-debug.apk "${CLEAN_NAME}_Debug.apk"
-        cp app/build/outputs/apk/release/app-release-signed.apk "${CLEAN_NAME}_Release.apk"
+        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+          cp app/build/outputs/apk/debug/app-debug.apk "${CLEAN_NAME}_Debug.apk"
+        fi
         
-        # Create info file
+        if [ -f "app/build/outputs/apk/release/app-release-signed.apk" ]; then
+          cp app/build/outputs/apk/release/app-release-signed.apk "${CLEAN_NAME}_Release.apk"
+        elif [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+          cp app/build/outputs/apk/release/app-release.apk "${CLEAN_NAME}_Release.apk"
+        fi
+        
+        # Create build info
         cat > build-info.txt << EOF
         NY BOTS Advanced WebView App
         ============================
@@ -966,127 +745,52 @@ jobs:
         
         Features:
         ✅ Advanced WebView with native integration
-        ✅ Biometric authentication support
+        ✅ Premium splash screen with animations
         ✅ Camera and media access
         ✅ Geolocation services
         ✅ File upload/download
-        ✅ Offline capabilities
-        ✅ Pull-to-refresh
-        ✅ Native splash screen animation
+        ✅ Pull-to-refresh functionality
         ✅ Hardware acceleration
-        ✅ Full native app experience
+        ✅ Native app experience
         
-        APK Files:
-        - ${CLEAN_NAME}_Debug.apk (Debug version)
-        - ${CLEAN_NAME}_Release.apk (Production ready, signed)
+        APK Files Generated:
+        $(ls -la *_*.apk 2>/dev/null || echo "No APK files found")
         EOF
         
-    - name: Upload Debug APK
+        ls -la
+        
+    - name: Upload APK Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: debug-apk
+        name: ny-bots-apks
         path: |
           android-app/*_Debug.apk
+          android-app/*_Release.apk
           android-app/build-info.txt
         retention-days: 30
         
-    - name: Upload Release APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-apk
-        path: |
-          android-app/*_Release.apk
-          android-app/build-info.txt
-        retention-days: 90
-        
-    - name: Generate APK Analysis
+    - name: Build Summary
       run: |
         cd android-app
-        echo "## 📱 NY BOTS Advanced WebView App - Build Complete!" > build-summary.md
-        echo "" >> build-summary.md
-        echo "### 🚀 App Features:" >> build-summary.md
-        echo "- **🎨 Premium Splash Animation**: Custom NY BOTS logo with smooth transitions" >> build-summary.md
-        echo "- **🔒 Biometric Security**: Fingerprint & face unlock integration" >> build-summary.md
-        echo "- **📸 Camera Integration**: Full camera and media capture support" >> build-summary.md
-        echo "- **📍 Location Services**: GPS and geolocation access" >> build-summary.md
-        echo "- **📁 File Management**: Upload/download with native file picker" >> build-summary.md
-        echo "- **⚡ Hardware Acceleration**: Optimized performance" >> build-summary.md
-        echo "- **🔄 Pull-to-Refresh**: Native gesture support" >> build-summary.md
-        echo "- **🌐 Advanced WebView**: Latest WebView with all modern web APIs" >> build-summary.md
-        echo "- **📱 Native Experience**: Indistinguishable from native apps" >> build-summary.md
-        echo "" >> build-summary.md
-        echo "### 📋 Build Information:" >> build-summary.md
-        echo "- **App Name**: ${{ github.event.inputs.app_name }}" >> build-summary.md
-        echo "- **Package**: ${{ github.event.inputs.package_name }}" >> build-summary.md
-        echo "- **Content URL**: ${{ github.event.inputs.app_url }}" >> build-summary.md
-        echo "- **Build Date**: $(date)" >> build-summary.md
-        echo "- **Target SDK**: 34 (Android 14)" >> build-summary.md
-        echo "- **Min SDK**: 24 (Android 7.0)" >> build-summary.md
-        echo "" >> build-summary.md
-        echo "### 📦 APK Downloads:" >> build-summary.md
-        echo "Two APK variants have been generated:" >> build-summary.md
-        echo "1. **Debug APK** - For testing and development" >> build-summary.md
-        echo "2. **Release APK** - Production-ready, optimized and signed" >> build-summary.md
-        echo "" >> build-summary.md
-        echo "### 🎯 What makes this special:" >> build-summary.md
-        echo "This isn't just a basic web wrapper - it's a sophisticated native Android app that:" >> build-summary.md
-        echo "- Provides seamless web-to-native integration" >> build-summary.md
-        echo "- Includes advanced security features" >> build-summary.md
-        echo "- Offers full device capability access" >> build-summary.md
-        echo "- Delivers premium user experience with custom animations" >> build-summary.md
-        echo "- Maintains perfect performance optimization" >> build-summary.md
-        
-    - name: Create Release
-      if: success()
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: "build-${{ github.run_number }}"
-        release_name: "${{ github.event.inputs.app_name }} - Build ${{ github.run_number }}"
-        body: |
-          # 🚀 NY BOTS Advanced WebView App
-          
-          **App Details:**
-          - 📱 **Name**: ${{ github.event.inputs.app_name }}
-          - 📦 **Package**: ${{ github.event.inputs.package_name }}
-          - 🌐 **Content**: ${{ github.event.inputs.app_url }}
-          - 🏗️ **Build**: #${{ github.run_number }}
-          - 📅 **Date**: $(date '+%Y-%m-%d %H:%M:%S')
-          
-          ## ✨ Premium Features Included:
-          
-          ### 🎨 **Visual Experience**
-          - Custom NY BOTS splash screen with smooth animations
-          - Material Design 3 components
-          - Hardware-accelerated graphics
-          - Adaptive app icon for all Android versions
-          
-          ### 🔧 **Technical Capabilities**
-          - Latest WebView engine with all modern web APIs
-          - JavaScript-Native bridge for advanced integrations
-          - Biometric authentication (fingerprint/face unlock)
-          - Camera and microphone access
-          - GPS and location services
-          - File upload/download with native picker
-          
-          ### 🛡️ **Security & Performance**
-          - Code obfuscation and optimization
-          - Network security configuration
-          - Secure HTTPS handling
-          - Memory optimization for smooth performance
-          
-          ### 📱 **Native App Features**
-          - Pull-to-refresh gesture
-          - Back button navigation
-          - Share functionality
-          - Offline capability detection
-          - Battery optimization compliance
-          
-          **This app provides a completely native experience - users won't know it's web-based!**
-          
-          ---
-          
-          Download the **Release APK** for production use or **Debug APK** for testing.
-        draft: false
-        prerelease: false
+        echo "## 📱 NY BOTS App Build Complete!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🚀 App Configuration:" >> $GITHUB_STEP_SUMMARY
+        echo "- **App Name:** ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Package:** ${{ github.event.inputs.package_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Content URL:** ${{ github.event.inputs.app_url }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Generated APKs:" >> $GITHUB_STEP_SUMMARY
+        if [ -f "*_Debug.apk" ]; then
+          echo "✅ Debug APK created successfully" >> $GITHUB_STEP_SUMMARY
+        fi
+        if [ -f "*_Release.apk" ]; then
+          echo "✅ Release APK created and signed" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Features Included:" >> $GITHUB_STEP_SUMMARY
+        echo "- 🎨 Premium splash screen with NY BOTS logo" >> $GITHUB_STEP_SUMMARY
+        echo "- 📱 Advanced WebView with native features" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔄 Pull-to-refresh functionality" >> $GITHUB_STEP_SUMMARY
+        echo "- 📸 Camera and file upload support" >> $GITHUB_STEP_SUMMARY
+        echo "- 📍 Geolocation services" >> $GITHUB_STEP_SUMMARY
+        echo "- ⚡ Hardware acceleration enabled" >> $GITHUB_STEP_SUMMARY
