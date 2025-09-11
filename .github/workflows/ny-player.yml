@@ -1,479 +1,366 @@
-name: NY BOTS App Builder
+name: Android Build with Complete App Code
 
 on:
-  workflow_dispatch:
-    inputs:
-      app_url:
-        description: 'App Content URL'
-        required: true
-        default: 'https://nybots.ai'
-        type: string
-      app_name:
-        description: 'App Name'
-        required: true
-        default: 'NY BOTS'
-        type: string
-      package_name:
-        description: 'Package Name'
-        required: true
-        default: 'com.nybots.app'
-        type: string
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
 
 jobs:
-  build-android-app:
+  build:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Create Android Project Structure
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
+    - name: Create Complete App Structure
       run: |
-        # Create all project directories first
-        mkdir -p android-app/gradle/wrapper
-        mkdir -p android-app/app/src/main/java/com/nybots/app
-        mkdir -p android-app/app/src/main/res/layout
-        mkdir -p android-app/app/src/main/res/values
-        mkdir -p android-app/app/src/main/res/mipmap-hdpi
-        mkdir -p android-app/app/src/main/res/mipmap-mdpi
-        mkdir -p android-app/app/src/main/res/mipmap-xhdpi
-        mkdir -p android-app/app/src/main/res/mipmap-xxhdpi
-        mkdir -p android-app/app/src/main/res/mipmap-xxxhdpi
-        mkdir -p android-app/app/src/main/res/raw
-        mkdir -p android-app/app/src/main/res/drawable
-        mkdir -p android-app/app/src/main/res/anim
-        mkdir -p android-app/app/src/main/res/xml
+        # Create directory structure
+        mkdir -p app/src/main/java/com/nybots/app/utils
+        mkdir -p app/src/main/res/{layout,values,drawable,xml}
         
-        cd android-app
-        
-        # Create Gradle Wrapper properties
-        cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-        distributionBase=GRADLE_USER_HOME
-        distributionPath=wrapper/dists
-        distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-bin.zip
-        zipStoreBase=GRADLE_USER_HOME
-        zipStorePath=wrapper/dists
+        # ROOT build.gradle.kts
+        cat > build.gradle.kts << 'EOF'
+        plugins {
+            id("com.android.application") version "8.3.0" apply false
+            id("org.jetbrains.kotlin.android") version "1.9.0" apply false
+        }
         EOF
         
-        # Create basic gradle wrapper files
-        cat > gradlew << 'EOF'
-        #!/usr/bin/env sh
-        
-        # Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
-        
-        ##############################################################################
-        ##
-        ##  Gradle start up script for UN*X
-        ##
-        ##############################################################################
-        
-        # Resolve links: $0 may be a link
-        PRG="$0"
-        # Need this for relative symlinks.
-        while [ -h "$PRG" ] ; do
-            ls=`ls -ld "$PRG"`
-            link=`expr "$ls" : '.*-> \(.*\)$'`
-            if expr "$link" : '/.*' > /dev/null; then
-                PRG="$link"
-            else
-                PRG=`dirname "$PRG"`"/$link"
-            fi
-        done
-        SAVED="`pwd`"
-        cd "`dirname \"$PRG\"`/" >/dev/null
-        APP_HOME="`pwd -P`"
-        cd "$SAVED" >/dev/null
-        
-        APP_NAME="Gradle"
-        APP_BASE_NAME=`basename "$0"`
-        
-        exec "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" "$@"
-        EOF
-        
-        # Make gradlew executable
-        chmod +x gradlew
-        
-        # Create basic gradle-wrapper.jar placeholder
-        # We'll use a simple approach with wget/curl to get the actual wrapper
-        mkdir -p gradle/wrapper
-        
-        # Download actual gradle wrapper jar
-        curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.0.0/gradle/wrapper/gradle-wrapper.jar || \
-        wget -O gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.0.0/gradle/wrapper/gradle-wrapper.jar || \
-        echo "Warning: Could not download gradle-wrapper.jar"
-        
-        # Create root build.gradle
-        cat > build.gradle << 'EOF'
-        buildscript {
-            ext.kotlin_version = "1.9.10"
+        # settings.gradle.kts
+        cat > settings.gradle.kts << 'EOF'
+        pluginManagement {
             repositories {
                 google()
                 mavenCentral()
                 gradlePluginPortal()
             }
-            dependencies {
-                classpath 'com.android.tools.build:gradle:8.1.2'
-                classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-            }
         }
-        allprojects {
+        dependencyResolutionManagement {
+            repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
             repositories {
                 google()
                 mavenCentral()
-                maven { url 'https://jitpack.io' }
             }
         }
-        
-        task clean(type: Delete) {
-            delete rootProject.buildDir
-        }
+        rootProject.name = "NY BOTS"
+        include(":app")
         EOF
         
-        # Create settings.gradle
-        cat > settings.gradle << 'EOF'
-        include ':app'
-        rootProject.name = "NYBotsApp"
+        # gradle.properties
+        cat > gradle.properties << 'EOF'
+        org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+        android.useAndroidX=true
+        android.enableJetifier=true
+        kotlin.code.style=official
+        android.nonTransitiveRClass=true
         EOF
         
-        # Create app build.gradle
-        cat > app/build.gradle << 'EOF'
+        # app/build.gradle.kts
+        cat > app/build.gradle.kts << 'EOF'
         plugins {
-            id 'com.android.application'
-            id 'org.jetbrains.kotlin.android'
+            id("com.android.application")
+            id("org.jetbrains.kotlin.android")
         }
-        
         android {
-            namespace '${{ github.event.inputs.package_name }}'
-            compileSdk 34
-            
+            namespace = "com.nybots.app"
+            compileSdk = 34
             defaultConfig {
-                applicationId "${{ github.event.inputs.package_name }}"
-                minSdk 24
-                targetSdk 34
-                versionCode 1
-                versionName "1.0.0"
-                
-                testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+                applicationId = "com.nybots.app"
+                minSdk = 24
+                targetSdk = 34
+                versionCode = 1
+                versionName = "1.0"
             }
-            
             buildTypes {
-                debug {
-                    debuggable true
-                    minifyEnabled false
-                    applicationIdSuffix ".debug"
-                }
                 release {
-                    debuggable false
-                    minifyEnabled true
-                    shrinkResources true
-                    proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                    isMinifyEnabled = false
+                    proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
                 }
             }
-            
             compileOptions {
-                sourceCompatibility JavaVersion.VERSION_1_8
-                targetCompatibility JavaVersion.VERSION_1_8
+                sourceCompatibility = JavaVersion.VERSION_1_8
+                targetCompatibility = JavaVersion.VERSION_1_8
             }
-            
             kotlinOptions {
-                jvmTarget = '1.8'
-            }
-            
-            buildFeatures {
-                viewBinding true
-            }
-            
-            packagingOptions {
-                resources {
-                    excludes += '/META-INF/{AL2.0,LGPL2.1}'
-                }
+                jvmTarget = "1.8"
             }
         }
-        
         dependencies {
-            implementation 'androidx.core:core-ktx:1.12.0'
-            implementation 'androidx.appcompat:appcompat:1.6.1'
-            implementation 'com.google.android.material:material:1.10.0'
-            implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-            implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
-            implementation 'androidx.webkit:webkit:1.8.0'
-            implementation 'com.airbnb.android:lottie:6.1.0'
-            implementation 'androidx.biometric:biometric:1.1.0'
-            implementation 'androidx.camera:camera-camera2:1.3.0'
-            implementation 'androidx.camera:camera-lifecycle:1.3.0'
-            implementation 'androidx.camera:camera-view:1.3.0'
-            implementation 'androidx.fragment:fragment-ktx:1.6.1'
-            implementation 'androidx.activity:activity-ktx:1.8.0'
+            implementation("androidx.appcompat:appcompat:1.6.1")
+            implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+            implementation("androidx.core:core-ktx:1.12.0")
+            implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+            implementation("com.google.android.material:material:1.11.0")
         }
         EOF
         
-    - name: Create Advanced MainActivity
-      run: |
-        cd android-app
-        cat > app/src/main/java/com/nybots/app/MainActivity.kt << 'EOF'
-        package com.nybots.app
+        # app/proguard-rules.pro
+        cat > app/proguard-rules.pro << 'EOF'
+        -keep public class * extends android.app.Activity
+        -keep public class * extends android.webkit.WebViewClient
+        -keep public class * extends android.webkit.WebChromeClient
+        EOF
         
-        import android.Manifest
+        # AndroidManifest.xml
+        cat > app/src/main/AndroidManifest.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+            xmlns:tools="http://schemas.android.com/tools">
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+            <uses-permission android:name="android.permission.VIBRATE" />
+            <application
+                android:allowBackup="true"
+                android:icon="@mipmap/ic_launcher"
+                android:label="@string/app_name"
+                android:roundIcon="@mipmap/ic_launcher_round"
+                android:supportsRtl="true"
+                android:theme="@style/Theme.NYBots"
+                android:usesCleartextTraffic="true"
+                android:hardwareAccelerated="true"
+                tools:targetApi="31">
+                <activity
+                    android:name=".SplashActivity"
+                    android:exported="true"
+                    android:theme="@style/SplashTheme">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN" />
+                        <category android:name="android.intent.category.LAUNCHER" />
+                    </intent-filter>
+                </activity>
+                <activity
+                    android:name=".WebViewActivity"
+                    android:exported="false" />
+            </application>
+        </manifest>
+        EOF
+        
+        # AppConfig.kt
+        cat > app/src/main/java/com/nybots/app/AppConfig.kt << 'EOF'
+        package com.nybots.app
+        object AppConfig {
+            const val APP_NAME = "NY BOTS"
+            const val LOGO_TEXT = "NY BOTS"
+            const val LOGO_COLOR = "#00FFEA"
+            const val BACKGROUND_COLOR = "#000000"
+            const val PRIMARY_COLOR = "#00FFEA"
+            const val TARGET_URL = "https://google.com"
+            const val SPLASH_DURATION_MS = 2200L
+            const val ENABLE_SPLASH_ANIMATION = true
+            const val HIDE_WEB_INDICATORS = true
+            const val CUSTOM_USER_AGENT = true
+            const val PULL_TO_REFRESH = true
+            const val HAPTIC_FEEDBACK = true
+            const val BLOCK_EXTERNAL_LINKS = true
+            
+            fun getCustomUserAgent(defaultAgent: String): String {
+                return if (CUSTOM_USER_AGENT) {
+                    defaultAgent.replace("; wv", "").replace("Version/4.0 ", "")
+                } else defaultAgent
+            }
+        }
+        EOF
+        
+        # SplashActivity.kt
+        cat > app/src/main/java/com/nybots/app/SplashActivity.kt << 'EOF'
+        package com.nybots.app
         import android.content.Intent
-        import android.content.pm.PackageManager
-        import android.graphics.Bitmap
-        import android.net.Uri
+        import android.graphics.Color
         import android.os.Bundle
         import android.os.Handler
         import android.os.Looper
-        import android.provider.MediaStore
-        import android.view.KeyEvent
+        import android.view.animation.*
+        import android.widget.TextView
+        import androidx.appcompat.app.AppCompatActivity
+        import androidx.constraintlayout.widget.ConstraintLayout
+        
+        class SplashActivity : AppCompatActivity() {
+            override fun onCreate(savedInstanceState: Bundle?) {
+                super.onCreate(savedInstanceState)
+                setContentView(R.layout.activity_splash)
+                setupUI()
+                val logoText = findViewById<TextView>(R.id.logoText)
+                if (AppConfig.ENABLE_SPLASH_ANIMATION) {
+                    startAnimation(logoText)
+                } else {
+                    logoText.alpha = 1.0f
+                }
+                Handler(Looper.getMainLooper()).postDelayed({
+                    startActivity(Intent(this, WebViewActivity::class.java))
+                    finish()
+                }, AppConfig.SPLASH_DURATION_MS)
+            }
+            
+            private fun setupUI() {
+                val rootLayout = findViewById<ConstraintLayout>(R.id.splashRoot)
+                rootLayout.setBackgroundColor(Color.parseColor(AppConfig.BACKGROUND_COLOR))
+                val logoText = findViewById<TextView>(R.id.logoText)
+                logoText.text = AppConfig.LOGO_TEXT
+                logoText.setTextColor(Color.parseColor(AppConfig.LOGO_COLOR))
+                logoText.setShadowLayer(20f, 0f, 0f, Color.parseColor(AppConfig.LOGO_COLOR))
+            }
+            
+            private fun startAnimation(logoText: TextView) {
+                val animationSet = AnimationSet(true)
+                val scaleUp = ScaleAnimation(0.3f, 1.2f, 0.3f, 1.2f, Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f).apply {
+                    duration = 800
+                    fillAfter = true
+                }
+                val fadeIn = AlphaAnimation(0.0f, 1.0f).apply {
+                    duration = 800
+                    fillAfter = true
+                }
+                val bounceBack = ScaleAnimation(1.2f, 1.0f, 1.2f, 1.0f, Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f).apply {
+                    duration = 600
+                    startOffset = 800
+                    interpolator = BounceInterpolator()
+                    fillAfter = true
+                }
+                animationSet.addAnimation(scaleUp)
+                animationSet.addAnimation(fadeIn)
+                animationSet.addAnimation(bounceBack)
+                logoText.startAnimation(animationSet)
+            }
+        }
+        EOF
+        
+        # WebViewActivity.kt
+        cat > app/src/main/java/com/nybots/app/WebViewActivity.kt << 'EOF'
+        package com.nybots.app
+        import android.annotation.SuppressLint
+        import android.content.Intent
+        import android.graphics.Bitmap
+        import android.net.ConnectivityManager
+        import android.net.NetworkCapabilities
+        import android.os.Bundle
         import android.view.View
-        import android.view.WindowManager
         import android.webkit.*
         import android.widget.ProgressBar
-        import androidx.activity.result.contract.ActivityResultContracts
         import androidx.appcompat.app.AppCompatActivity
-        import androidx.biometric.BiometricManager
-        import androidx.biometric.BiometricPrompt
-        import androidx.core.content.ContextCompat
         import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-        import androidx.webkit.WebSettingsCompat
-        import androidx.webkit.WebViewFeature
-        import java.io.File
         
-        class MainActivity : AppCompatActivity() {
-            
+        class WebViewActivity : AppCompatActivity() {
             private lateinit var webView: WebView
             private lateinit var progressBar: ProgressBar
             private lateinit var swipeRefresh: SwipeRefreshLayout
-            private var uploadMessage: ValueCallback<Array<Uri>>? = null
-            private val APP_URL = "${{ github.event.inputs.app_url }}"
             
-            private val fileChooserLauncher = registerForActivityResult(
-                ActivityResultContracts.StartActivityForResult()
-            ) { result ->
-                if (uploadMessage != null) {
-                    val results = WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
-                    uploadMessage!!.onReceiveValue(results)
-                    uploadMessage = null
-                }
-            }
-            
-            private val permissionLauncher = registerForActivityResult(
-                ActivityResultContracts.RequestMultiplePermissions()
-            ) { permissions ->
-                // Handle permissions
-            }
-            
+            @SuppressLint("SetJavaScriptEnabled")
             override fun onCreate(savedInstanceState: Bundle?) {
                 super.onCreate(savedInstanceState)
+                setContentView(R.layout.activity_webview)
                 
-                // Enable hardware acceleration and secure content
-                window.setFlags(
-                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
-                )
-                
-                setContentView(R.layout.activity_main)
-                
-                initViews()
-                setupAdvancedWebView()
-                requestPermissions()
-                loadApp()
-            }
-            
-            private fun initViews() {
                 webView = findViewById(R.id.webView)
                 progressBar = findViewById(R.id.progressBar)
                 swipeRefresh = findViewById(R.id.swipeRefresh)
+                
+                setupWebView()
+                setupSwipeRefresh()
+                
+                if (isNetworkAvailable()) {
+                    webView.loadUrl(AppConfig.TARGET_URL)
+                } else {
+                    loadOfflinePage()
+                }
             }
             
-            private fun setupAdvancedWebView() {
+            private fun setupWebView() {
+                webView.webViewClient = object : WebViewClient() {
+                    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                        super.onPageStarted(view, url, favicon)
+                        progressBar.visibility = View.VISIBLE
+                    }
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        super.onPageFinished(view, url)
+                        progressBar.visibility = View.GONE
+                        swipeRefresh.isRefreshing = false
+                        injectNativeCSS()
+                    }
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        val url = request?.url?.toString() ?: return false
+                        if (AppConfig.BLOCK_EXTERNAL_LINKS && !url.contains(extractDomain(AppConfig.TARGET_URL))) {
+                            startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                            return true
+                        }
+                        return false
+                    }
+                }
+                
+                webView.webChromeClient = object : WebChromeClient() {
+                    override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                        progressBar.progress = newProgress
+                    }
+                }
+                
                 webView.settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
-                    databaseEnabled = true
-                    allowFileAccess = true
-                    allowContentAccess = true
-                    allowFileAccessFromFileURLs = true
-                    allowUniversalAccessFromFileURLs = true
+                    cacheMode = WebSettings.LOAD_DEFAULT
                     loadWithOverviewMode = true
                     useWideViewPort = true
-                    setSupportZoom(true)
-                    builtInZoomControls = true
+                    builtInZoomControls = false
                     displayZoomControls = false
-                    javaScriptCanOpenWindowsAutomatically = true
-                    mediaPlaybackRequiresUserGesture = false
-                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                    cacheMode = WebSettings.LOAD_DEFAULT
-                    setGeolocationEnabled(true)
-                    setSupportMultipleWindows(true)
-                    userAgentString = "NYBotsApp/1.0 " + userAgentString
-                }
-                
-                // Enable dark mode support
-                if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
-                    WebSettingsCompat.setForceDark(webView.settings, WebSettingsCompat.FORCE_DARK_AUTO)
-                }
-                
-                webView.webViewClient = AdvancedWebViewClient()
-                webView.webChromeClient = AdvancedWebChromeClient()
-                
-                // Add JavaScript interface for native features
-                webView.addJavaScriptInterface(NativeInterface(), "NativeApp")
-                
-                swipeRefresh.setOnRefreshListener {
-                    webView.reload()
-                }
-                
-                // Enable pull-to-refresh with custom colors
-                swipeRefresh.setColorSchemeResources(
-                    android.R.color.holo_blue_bright,
-                    android.R.color.holo_green_light,
-                    android.R.color.holo_orange_light,
-                    android.R.color.holo_red_light
-                )
-            }
-            
-            private fun requestPermissions() {
-                val permissions = arrayOf(
-                    Manifest.permission.CAMERA,
-                    Manifest.permission.RECORD_AUDIO,
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-                )
-                permissionLauncher.launch(permissions)
-            }
-            
-            private fun loadApp() {
-                progressBar.visibility = View.VISIBLE
-                webView.loadUrl(APP_URL)
-            }
-            
-            private inner class AdvancedWebViewClient : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                    val url = request?.url.toString()
-                    
-                    // Handle external links
-                    if (!url.contains(Uri.parse(APP_URL).host ?: "")) {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                        return true
-                    }
-                    
-                    return false
-                }
-                
-                override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                    super.onPageStarted(view, url, favicon)
-                    progressBar.visibility = View.VISIBLE
-                }
-                
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    super.onPageFinished(view, url)
-                    progressBar.visibility = View.GONE
-                    swipeRefresh.isRefreshing = false
-                    
-                    // Inject custom CSS for native feel
-                    view?.evaluateJavascript("""
-                        (function() {
-                            var style = document.createElement('style');
-                            style.innerHTML = `
-                                * { 
-                                    -webkit-touch-callout: none; 
-                                    -webkit-user-select: none; 
-                                    user-select: none; 
-                                }
-                                body { 
-                                    -webkit-overflow-scrolling: touch;
-                                    overscroll-behavior: contain;
-                                }
-                                .native-app-hidden { display: none !important; }
-                            `;
-                            document.head.appendChild(style);
-                        })();
-                    """, null)
-                }
-                
-                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                    super.onReceivedError(view, request, error)
-                    // Show offline page or retry mechanism
+                    userAgentString = AppConfig.getCustomUserAgent(userAgentString)
+                    allowFileAccess = false
+                    allowContentAccess = false
                 }
             }
             
-            private inner class AdvancedWebChromeClient : WebChromeClient() {
-                override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                    progressBar.progress = newProgress
-                    if (newProgress == 100) {
-                        progressBar.visibility = View.GONE
-                    }
-                }
-                
-                override fun onShowFileChooser(
-                    webView: WebView?,
-                    filePathCallback: ValueCallback<Array<Uri>>?,
-                    fileChooserParams: FileChooserParams?
-                ): Boolean {
-                    uploadMessage = filePathCallback
-                    
-                    val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                        type = "*/*"
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                    }
-                    
-                    fileChooserLauncher.launch(Intent.createChooser(intent, "Choose File"))
-                    return true
-                }
-                
-                override fun onPermissionRequest(request: PermissionRequest?) {
-                    runOnUiThread {
-                        request?.grant(request.resources)
-                    }
-                }
-                
-                override fun onGeolocationPermissionsShowPrompt(
-                    origin: String?,
-                    callback: GeolocationPermissions.Callback?
-                ) {
-                    callback?.invoke(origin, true, false)
+            private fun setupSwipeRefresh() {
+                if (AppConfig.PULL_TO_REFRESH) {
+                    swipeRefresh.setColorSchemeColors(android.graphics.Color.parseColor(AppConfig.PRIMARY_COLOR))
+                    swipeRefresh.setOnRefreshListener { webView.reload() }
+                } else {
+                    swipeRefresh.isEnabled = false
                 }
             }
             
-            private inner class NativeInterface {
-                @JavascriptInterface
-                fun showBiometric() {
-                    runOnUiThread {
-                        val biometricManager = BiometricManager.from(this@MainActivity)
-                        if (biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS) {
-                            val biometricPrompt = BiometricPrompt(this@MainActivity as androidx.fragment.app.FragmentActivity,
-                                ContextCompat.getMainExecutor(this@MainActivity),
-                                object : BiometricPrompt.AuthenticationCallback() {
-                                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                                        webView.evaluateJavascript("window.biometricSuccess && window.biometricSuccess();", null)
-                                    }
-                                })
-                            
-                            val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                                .setTitle("Biometric Authentication")
-                                .setSubtitle("Use your biometric credential to authenticate")
-                                .setNegativeButtonText("Cancel")
-                                .build()
-                            
-                            biometricPrompt.authenticate(promptInfo)
-                        }
-                    }
-                }
-                
-                @JavascriptInterface
-                fun vibrate(duration: Long) {
-                    // Haptic feedback
-                }
-                
-                @JavascriptInterface
-                fun getDeviceInfo(): String {
-                    return """{"platform": "android", "version": "1.0.0", "device": "native"}"""
-                }
+            private fun injectNativeCSS() {
+                val css = """
+                    javascript:(function() {
+                        var style = document.createElement('style');
+                        style.innerHTML = '* { -webkit-tap-highlight-color: transparent !important; } ::-webkit-scrollbar { width: 0px; background: transparent; } input, textarea, select { border-radius: 12px !important; border: 1px solid #E0E0E0 !important; padding: 12px 16px !important; } button { border-radius: 12px !important; background: ${AppConfig.PRIMARY_COLOR} !important; color: #000000 !important; border: none !important; padding: 12px 24px !important; }';
+                        document.head.appendChild(style);
+                    })()
+                """.trimIndent()
+                webView.evaluateJavascript(css, null)
             }
             
-            override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-                if (keyCode == KeyEvent.KEYCODE_BACK && webView.canGoBack()) {
-                    webView.goBack()
-                    return true
-                }
-                return super.onKeyDown(keyCode, event)
+            private fun loadOfflinePage() {
+                val html = """
+                    <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body{font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 50px; background: ${AppConfig.BACKGROUND_COLOR}; color: ${AppConfig.PRIMARY_COLOR};} .icon{font-size: 64px; margin-bottom: 20px;} .title{font-size: 24px; margin-bottom: 10px;}</style></head><body><div class="icon">📱</div><div class="title">You're Offline</div><div>Check your internet connection and try again</div></body></html>
+                """.trimIndent()
+                webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+            }
+            
+            private fun isNetworkAvailable(): Boolean {
+                val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+                val network = connectivityManager.activeNetwork ?: return false
+                val networkCapabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+                return networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            }
+            
+            private fun extractDomain(url: String): String {
+                return try { android.net.Uri.parse(url).host ?: "" } catch (e: Exception) { "" }
+            }
+            
+            override fun onBackPressed() {
+                if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
+            }
+            
+            override fun onPause() {
+                super.onPause()
+                webView.onPause()
             }
             
             override fun onResume() {
@@ -481,515 +368,148 @@ jobs:
                 webView.onResume()
             }
             
-            override fun onPause() {
-                super.onPause()
-                webView.onPause()
+            override fun onDestroy() {
+                webView.destroy()
+                super.onDestroy()
             }
         }
         EOF
         
-    - name: Create Splash Activity
-      run: |
-        cd android-app
-        cat > app/src/main/java/com/nybots/app/SplashActivity.kt << 'EOF'
-        package com.nybots.app
+        # NativeUtils.kt
+        cat > app/src/main/java/com/nybots/app/utils/NativeUtils.kt << 'EOF'
+        package com.nybots.app.utils
+        import android.content.Context
+        import android.os.Build
+        import android.os.VibrationEffect
+        import android.os.Vibrator
         
-        import android.animation.AnimatorSet
-        import android.animation.ObjectAnimator
-        import android.content.Intent
-        import android.os.Bundle
-        import android.os.Handler
-        import android.os.Looper
-        import android.view.View
-        import android.view.animation.AccelerateDecelerateInterpolator
-        import android.widget.ImageView
-        import android.widget.TextView
-        import androidx.appcompat.app.AppCompatActivity
-        import androidx.core.view.ViewCompat
-        import androidx.core.view.WindowInsetsCompat
-        import com.airbnb.lottie.LottieAnimationView
-        
-        class SplashActivity : AppCompatActivity() {
-            
-            override fun onCreate(savedInstanceState: Bundle?) {
-                super.onCreate(savedInstanceState)
-                setContentView(R.layout.activity_splash)
-                
-                // Hide system UI for immersive experience
-                window.decorView.systemUiVisibility = (
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                )
-                
-                setupAnimation()
-            }
-            
-            private fun setupAnimation() {
-                val logo = findViewById<ImageView>(R.id.logoImage)
-                val title = findViewById<TextView>(R.id.titleText)
-                val subtitle = findViewById<TextView>(R.id.subtitleText)
-                
-                // Initial state
-                logo.alpha = 0f
-                logo.scaleX = 0.5f
-                logo.scaleY = 0.5f
-                title.alpha = 0f
-                title.translationY = 50f
-                subtitle.alpha = 0f
-                subtitle.translationY = 30f
-                
-                // Animate logo
-                val logoAnimator = AnimatorSet().apply {
-                    playTogether(
-                        ObjectAnimator.ofFloat(logo, "alpha", 0f, 1f),
-                        ObjectAnimator.ofFloat(logo, "scaleX", 0.5f, 1.2f, 1f),
-                        ObjectAnimator.ofFloat(logo, "scaleY", 0.5f, 1.2f, 1f),
-                        ObjectAnimator.ofFloat(logo, "rotation", 0f, 360f)
-                    )
-                    duration = 1000
-                    interpolator = AccelerateDecelerateInterpolator()
+        object NativeUtils {
+            fun performHapticFeedback(context: Context) {
+                if (!com.nybots.app.AppConfig.HAPTIC_FEEDBACK) return
+                val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                if (vibrator?.hasVibrator() == true) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        vibrator.vibrate(VibrationEffect.createOneShot(10, VibrationEffect.DEFAULT_AMPLITUDE))
+                    } else {
+                        vibrator.vibrate(10)
+                    }
                 }
-                
-                // Animate title
-                val titleAnimator = AnimatorSet().apply {
-                    playTogether(
-                        ObjectAnimator.ofFloat(title, "alpha", 0f, 1f),
-                        ObjectAnimator.ofFloat(title, "translationY", 50f, 0f)
-                    )
-                    duration = 800
-                    startDelay = 500
-                    interpolator = AccelerateDecelerateInterpolator()
-                }
-                
-                // Animate subtitle
-                val subtitleAnimator = AnimatorSet().apply {
-                    playTogether(
-                        ObjectAnimator.ofFloat(subtitle, "alpha", 0f, 1f),
-                        ObjectAnimator.ofFloat(subtitle, "translationY", 30f, 0f)
-                    )
-                    duration = 600
-                    startDelay = 800
-                    interpolator = AccelerateDecelerateInterpolator()
-                }
-                
-                logoAnimator.start()
-                titleAnimator.start()
-                subtitleAnimator.start()
-                
-                // Navigate to main activity
-                Handler(Looper.getMainLooper()).postDelayed({
-                    startActivity(Intent(this, MainActivity::class.java))
-                    overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
-                    finish()
-                }, 2500)
             }
         }
         EOF
-        
-    - name: Create Layouts and Resources
+
+    - name: Create Layout Files
       run: |
-        cd android-app
-        
-        # Create splash layout
+        # activity_splash.xml
         cat > app/src/main/res/layout/activity_splash.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
-        <androidx.constraintlayout.widget.ConstraintLayout 
-            xmlns:android="http://schemas.android.com/apk/res/android"
+        <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
             xmlns:app="http://schemas.android.com/apk/res-auto"
+            android:id="@+id/splashRoot"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="@drawable/splash_gradient">
-        
-            <ImageView
-                android:id="@+id/logoImage"
-                android:layout_width="120dp"
-                android:layout_height="120dp"
-                android:src="@drawable/ny_bots_logo"
-                android:contentDescription="NY BOTS Logo"
-                app:layout_constraintBottom_toTopOf="@id/titleText"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintVertical_chainStyle="packed" />
-        
+            android:background="@color/black">
             <TextView
-                android:id="@+id/titleText"
+                android:id="@+id/logoText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="${{ github.event.inputs.app_name }}"
-                android:textColor="@android:color/white"
-                android:textSize="32sp"
+                android:text="NY BOTS"
+                android:textColor="@color/aqua"
+                android:textSize="48sp"
                 android:textStyle="bold"
-                android:fontFamily="sans-serif-medium"
-                android:layout_marginTop="24dp"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/logoImage"
-                app:layout_constraintBottom_toTopOf="@id/subtitleText" />
-        
-            <TextView
-                android:id="@+id/subtitleText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Advanced AI Solutions"
-                android:textColor="@android:color/white"
-                android:textSize="16sp"
-                android:alpha="0.8"
-                android:layout_marginTop="8dp"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/titleText"
-                app:layout_constraintBottom_toBottomOf="parent" />
-        
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="4dp"
-                android:background="@drawable/loading_progress"
-                android:layout_marginHorizontal="48dp"
-                android:layout_marginBottom="48dp"
-                app:layout_constraintBottom_toBottomOf="parent" />
-        
+                android:alpha="0"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
         </androidx.constraintlayout.widget.ConstraintLayout>
         EOF
         
-        # Create main layout
-        cat > app/src/main/res/layout/activity_main.xml << 'EOF'
+        # activity_webview.xml
+        cat > app/src/main/res/layout/activity_webview.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
-        <androidx.constraintlayout.widget.ConstraintLayout 
-            xmlns:android="http://schemas.android.com/apk/res/android"
+        <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
             xmlns:app="http://schemas.android.com/apk/res-auto"
             android:layout_width="match_parent"
             android:layout_height="match_parent">
-        
+            <ProgressBar
+                android:id="@+id/progressBar"
+                style="@android:style/Widget.ProgressBar.Horizontal"
+                android:layout_width="0dp"
+                android:layout_height="3dp"
+                android:max="100"
+                android:visibility="gone"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
             <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
                 android:id="@+id/swipeRefresh"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent">
-        
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                app:layout_constraintTop_toBottomOf="@id/progressBar"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent">
                 <WebView
                     android:id="@+id/webView"
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
-        
+                    android:layout_height="match_parent"
+                    android:scrollbars="none" />
             </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
-        
-            <ProgressBar
-                android:id="@+id/progressBar"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="match_parent"
-                android:layout_height="3dp"
-                android:progressTint="#FF4081"
-                android:progressBackgroundTint="@android:color/transparent"
-                app:layout_constraintTop_toTopOf="parent" />
-        
         </androidx.constraintlayout.widget.ConstraintLayout>
         EOF
-        
-        # Create drawable resources
-        cat > app/src/main/res/drawable/splash_gradient.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <shape xmlns:android="http://schemas.android.com/apk/res/android">
-            <gradient
-                android:angle="45"
-                android:startColor="#667eea"
-                android:centerColor="#764ba2"
-                android:endColor="#f093fb"
-                android:type="linear" />
-        </shape>
-        EOF
-        
-        cat > app/src/main/res/drawable/loading_progress.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <animation-list xmlns:android="http://schemas.android.com/apk/res/android" android:oneshot="false">
-            <item android:drawable="@drawable/progress_frame1" android:duration="150" />
-            <item android:drawable="@drawable/progress_frame2" android:duration="150" />
-            <item android:drawable="@drawable/progress_frame3" android:duration="150" />
-            <item android:drawable="@drawable/progress_frame2" android:duration="150" />
-        </animation-list>
-        EOF
-        
-        # Create NY BOTS logo (simple vector)
-        cat > app/src/main/res/drawable/ny_bots_logo.xml << 'EOF'
-        <vector xmlns:android="http://schemas.android.com/apk/res/android"
-            android:width="120dp"
-            android:height="120dp"
-            android:viewportWidth="120"
-            android:viewportHeight="120">
-            
-            <group android:scaleX="1.2" android:scaleY="1.2" android:pivotX="60" android:pivotY="60">
-                <!-- Background circle -->
-                <path android:fillColor="#ffffff"
-                      android:pathData="M60,10 A50,50 0 1,1 59.999,10 Z" />
-                
-                <!-- NY Text -->
-                <path android:fillColor="#667eea"
-                      android:pathData="M25,35 L35,35 L35,65 L45,35 L55,35 L45,65 L35,65 Z" />
-                
-                <!-- BOTS circuit pattern -->
-                <path android:fillColor="#f093fb"
-                      android:pathData="M65,40 L95,40 L95,45 L65,45 Z" />
-                <path android:fillColor="#f093fb"
-                      android:pathData="M65,50 L85,50 L85,55 L65,55 Z" />
-                <path android:fillColor="#f093fb"
-                      android:pathData="M65,60 L90,60 L90,65 L65,65 Z" />
-                      
-                <!-- Circuit dots -->
-                <circle android:fillColor="#764ba2" android:cx="70" android:cy="42.5" android:r="2"/>
-                <circle android:fillColor="#764ba2" android:cx="80" android:cy="52.5" android:r="2"/>
-                <circle android:fillColor="#764ba2" android:cx="75" android:cy="62.5" android:r="2"/>
-            </group>
-        </vector>
-        EOF
-        
-        # Create progress frames
-        for i in {1..3}; do
-            cat > app/src/main/res/drawable/progress_frame$i.xml << EOF
-        <shape xmlns:android="http://schemas.android.com/apk/res/android">
-            <solid android:color="#$(printf '%02x' $((255 - i * 50)))$(printf '%02x' $((100 + i * 50)))$(printf '%02x' $((200 + i * 18)))" />
-            <corners android:radius="2dp" />
-        </shape>
-        EOF
-        done
-        
-    - name: Create Manifest and Config Files
+
+    - name: Create Resource Files
       run: |
-        cd android-app
-        
-        # Create AndroidManifest.xml
-        cat > app/src/main/AndroidManifest.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-            xmlns:tools="http://schemas.android.com/tools">
-        
-            <uses-permission android:name="android.permission.INTERNET" />
-            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-            <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-            <uses-permission android:name="android.permission.CAMERA" />
-            <uses-permission android:name="android.permission.RECORD_AUDIO" />
-            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
-                android:maxSdkVersion="28" />
-            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
-                android:maxSdkVersion="32" />
-            <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-            <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-            <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-            <uses-permission android:name="android.permission.USE_FINGERPRINT" />
-            <uses-permission android:name="android.permission.VIBRATE" />
-            <uses-permission android:name="android.permission.WAKE_LOCK" />
-            
-            <application
-                android:allowBackup="true"
-                android:dataExtractionRules="@xml/data_extraction_rules"
-                android:fullBackupContent="@xml/backup_rules"
-                android:icon="@mipmap/ic_launcher"
-                android:label="${{ github.event.inputs.app_name }}"
-                android:roundIcon="@mipmap/ic_launcher_round"
-                android:theme="@style/Theme.NYBotsApp"
-                android:usesCleartextTraffic="true"
-                android:hardwareAccelerated="true"
-                android:largeHeap="true"
-                android:supportsRtl="true"
-                android:networkSecurityConfig="@xml/network_security_config"
-                tools:targetApi="31">
-                
-                <activity
-                    android:name=".SplashActivity"
-                    android:exported="true"
-                    android:screenOrientation="portrait"
-                    android:theme="@style/Theme.NYBotsApp.Splash">
-                    <intent-filter>
-                        <action android:name="android.intent.action.MAIN" />
-                        <category android:name="android.intent.category.LAUNCHER" />
-                    </intent-filter>
-                </activity>
-                
-                <activity
-                    android:name=".MainActivity"
-                    android:exported="false"
-                    android:configChanges="orientation|keyboardHidden|screenSize"
-                    android:hardwareAccelerated="true"
-                    android:launchMode="singleTop" />
-                    
-            </application>
-        </manifest>
-        EOF
-                
-                <activity
-                    android:name=".SplashActivity"
-                    android:exported="true"
-                    android:screenOrientation="portrait"
-                    android:theme="@style/Theme.NYBotsApp.Splash">
-                    <intent-filter>
-                        <action android:name="android.intent.action.MAIN" />
-                        <category android:name="android.intent.category.LAUNCHER" />
-                    </intent-filter>
-                </activity>
-                
-                <activity
-                    android:name=".MainActivity"
-                    android:exported="false"
-                    android:configChanges="orientation|keyboardHidden|screenSize"
-                    android:hardwareAccelerated="true"
-                    android:launchMode="singleTop" />
-                    
-            </application>
-        </manifest>
-        EOF
-        
-        # Create values/styles.xml
-        cat > app/src/main/res/values/styles.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <resources>
-            <style name="Theme.NYBotsApp" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-                <item name="colorPrimary">#667eea</item>
-                <item name="colorPrimaryVariant">#764ba2</item>
-                <item name="colorOnPrimary">#FFFFFF</item>
-                <item name="colorSecondary">#f093fb</item>
-                <item name="colorOnSecondary">#000000</item>
-                <item name="android:statusBarColor">@android:color/transparent</item>
-                <item name="android:windowLightStatusBar">false</item>
-                <item name="android:navigationBarColor">@android:color/transparent</item>
-            </style>
-        
-            <style name="Theme.NYBotsApp.Splash" parent="Theme.NYBotsApp">
-                <item name="android:windowNoTitle">true</item>
-                <item name="android:windowActionBar">false</item>
-                <item name="android:windowFullscreen">true</item>
-                <item name="android:windowContentOverlay">@null</item>
-                <item name="android:windowBackground">@drawable/splash_gradient</item>
-            </style>
-        </resources>
-        EOF
-        
-        # Create values/strings.xml
-        cat > app/src/main/res/values/strings.xml << 'EOF'
-        <resources>
-            <string name="app_name">${{ github.event.inputs.app_name }}</string>
-        </resources>
-        EOF
-        
-        # Create values/colors.xml
+        # colors.xml
         cat > app/src/main/res/values/colors.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
         <resources>
-            <color name="primary">#667eea</color>
-            <color name="primary_variant">#764ba2</color>
-            <color name="secondary">#f093fb</color>
-            <color name="white">#FFFFFF</color>
-            <color name="black">#000000</color>
+            <color name="black">#FF000000</color>
+            <color name="aqua">#FF00FFEA</color>
+            <color name="white">#FFFFFFFF</color>
+            <color name="purple_200">#FFBB86FC</color>
+            <color name="purple_500">#FF6200EE</color>
+            <color name="purple_700">#FF3700B3</color>
+            <color name="teal_200">#FF03DAC5</color>
+            <color name="teal_700">#FF018786</color>
         </resources>
         EOF
         
-    - name: Create App Icons and Additional Resources
-      run: |
-        cd android-app
+        # strings.xml
+        cat > app/src/main/res/values/strings.xml << 'EOF'
+        <resources>
+            <string name="app_name">NY BOTS</string>
+        </resources>
+        EOF
         
-        # Create simple PNG launcher icons using ImageMagick
-        # Install ImageMagick first
-        sudo apt-get update && sudo apt-get install -y imagemagick
-        
-        # Create a simple icon using ImageMagick
-        convert -size 192x192 xc:"#667eea" \
-                -fill white -font DejaVu-Sans-Bold -pointsize 60 \
-                -gravity center -annotate +0+0 'NY' \
-                -fill "#f093fb" -font DejaVu-Sans -pointsize 32 \
-                -gravity center -annotate +0+40 'BOTS' \
-                temp_icon.png
-        
-        # Create different density versions
-        declare -A densities=( ["mdpi"]=48 ["hdpi"]=72 ["xhdpi"]=96 ["xxhdpi"]=144 ["xxxhdpi"]=192 )
-        
-        for density in "${!densities[@]}"; do
-            size=${densities[$density]}
-            convert temp_icon.png -resize ${size}x${size} app/src/main/res/mipmap-$density/ic_launcher.png
-            # Create round version (same image for now)
-            cp app/src/main/res/mipmap-$density/ic_launcher.png app/src/main/res/mipmap-$density/ic_launcher_round.png
-        done
-        
-        # Clean up temp file
-        rm temp_icon.png
-        
-        # Create network security config
-        cat > app/src/main/res/xml/network_security_config.xml << 'EOF'
+        # styles.xml
+        cat > app/src/main/res/values/styles.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
-        <network-security-config>
-            <domain-config cleartextTrafficPermitted="true">
-                <domain includeSubdomains="true">localhost</domain>
-                <domain includeSubdomains="true">127.0.0.1</domain>
-                <domain includeSubdomains="true">10.0.2.2</domain>
-            </domain-config>
-            <base-config cleartextTrafficPermitted="true">
-                <trust-anchors>
-                    <certificates src="system"/>
-                    <certificates src="user"/>
-                </trust-anchors>
-            </base-config>
-        </network-security-config>
+        <resources>
+            <style name="Theme.NYBots" parent="Theme.AppCompat.DayNight.DarkActionBar">
+                <item name="colorPrimary">@color/purple_500</item>
+                <item name="colorPrimaryVariant">@color/purple_700</item>
+                <item name="colorOnPrimary">@color/white</item>
+                <item name="android:statusBarColor">@color/purple_700</item>
+            </style>
+            <style name="SplashTheme" parent="Theme.AppCompat.NoActionBar">
+                <item name="android:windowBackground">@color/black</item>
+                <item name="android:statusBarColor">@color/black</item>
+                <item name="android:navigationBarColor">@color/black</item>
+            </style>
+        </resources>
         EOF
         
-        # Create backup rules
-        cat > app/src/main/res/xml/backup_rules.xml << 'EOF'
+        # button_rounded.xml
+        cat > app/src/main/res/drawable/button_rounded.xml << 'EOF'
         <?xml version="1.0" encoding="utf-8"?>
-        <full-backup-content>
-            <exclude domain="sharedpref" path="device_prefs.xml"/>
-        </full-backup-content>
+        <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+            <solid android:color="#FF00FFEA" />
+            <corners android:radius="12dp" />
+        </shape>
         EOF
-        
-        # Create data extraction rules
-        cat > app/src/main/res/xml/data_extraction_rules.xml << 'EOF'
-        <?xml version="1.0" encoding="utf-8"?>
-        <data-extraction-rules>
-            <cloud-backup>
-                <exclude domain="sharedpref" path="device_prefs.xml"/>
-            </cloud-backup>
-            <device-transfer>
-                <exclude domain="sharedpref" path="device_prefs.xml"/>
-            </device-transfer>
-        </data-extraction-rules>
-        EOF
-        
-        # Create proguard rules
-        cat > app/proguard-rules.pro << 'EOF'
-        -keepattributes *Annotation*
-        -keepclassmembers class * {
-            @android.webkit.JavascriptInterface <methods>;
-        }
-        -keepclassmembers class * extends android.webkit.WebViewClient {
-            public void *(android.webkit.WebView, java.lang.String, android.graphics.Bitmap);
-            public boolean *(android.webkit.WebView, java.lang.String);
-        }
-        -keepclassmembers class * extends android.webkit.WebChromeClient {
-            public void *(android.webkit.WebView, java.lang.String);
-        }
-        -keep class com.nybots.app.** { *; }
-        EOF
-        
-        # Create gradle.properties
-        cat > gradle.properties << 'EOF'
-        android.useAndroidX=true
-        android.enableJetifier=true
-        org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8
-        org.gradle.parallel=true
-        org.gradle.configureondemand=true
-        org.gradle.daemon=true
-        org.gradle.caching=true
-        android.enableR8.fullMode=true
-        EOF
-        
-    - name: Setup Android SDK and Build Environment
-      uses: android-actions/setup-android@v3
-      
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        
+
     - name: Cache Gradle Dependencies
       uses: actions/cache@v4
       with:
@@ -999,288 +519,43 @@ jobs:
         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
         restore-keys: |
           ${{ runner.os }}-gradle-
-          
-    - name: Make Gradlew Executable
+
+    - name: Make gradlew executable
+      run: chmod +x gradlew
+
+    - name: Clean and Build
       run: |
-        cd android-app
-        chmod +x gradlew
-        
-    - name: Clean Project
-      run: |
-        cd android-app
-        ./gradlew clean --stacktrace
-        
-    - name: Build Debug APK
-      run: |
-        cd android-app
-        ./gradlew assembleDebug --stacktrace --info
-        
-    - name: Build Release APK
-      run: |
-        cd android-app
-        ./gradlew assembleRelease --stacktrace --info
-        
-    - name: Create Self-Signed Keystore
-      run: |
-        cd android-app
-        keytool -genkey -v -keystore app-release-key.keystore -alias app-key -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=NY BOTS, OU=Mobile, O=NY BOTS, L=New York, S=NY, C=US"
-        
-    - name: Sign Release APK
-      run: |
-        cd android-app
-        if [ -f "app/build/outputs/apk/release/app-release-unsigned.apk" ]; then
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore app-release-key.keystore -storepass android -keypass android app/build/outputs/apk/release/app-release-unsigned.apk app-key
-          $ANDROID_HOME/build-tools/34.0.0/zipalign -v 4 app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/release/app-release-signed.apk
-        else
-          echo "Release APK not found, checking for other release APKs..."
-          ls -la app/build/outputs/apk/release/
-          # Try to find any release APK
-          RELEASE_APK=$(find app/build/outputs/apk/release/ -name "*.apk" | head -1)
-          if [ -n "$RELEASE_APK" ]; then
-            echo "Found release APK: $RELEASE_APK"
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore app-release-key.keystore -storepass android -keypass android "$RELEASE_APK" app-key
-            $ANDROID_HOME/build-tools/34.0.0/zipalign -v 4 "$RELEASE_APK" app/build/outputs/apk/release/app-release-signed.apk
-          fi
-        fi
-        
-    - name: Rename and Prepare APKs
-      run: |
-        cd android-app
-        APP_NAME="${{ github.event.inputs.app_name }}"
-        CLEAN_NAME=$(echo "$APP_NAME" | tr ' ' '_' | tr -cd '[:alnum:]_')
-        
-        # Find debug APK
-        DEBUG_APK=$(find app/build/outputs/apk/debug/ -name "*.apk" | head -1)
-        if [ -n "$DEBUG_APK" ]; then
-          cp "$DEBUG_APK" "${CLEAN_NAME}_Debug.apk"
-          echo "Debug APK created: ${CLEAN_NAME}_Debug.apk"
-        fi
-        
-        # Find release APK
-        if [ -f "app/build/outputs/apk/release/app-release-signed.apk" ]; then
-          cp app/build/outputs/apk/release/app-release-signed.apk "${CLEAN_NAME}_Release.apk"
-          echo "Signed Release APK created: ${CLEAN_NAME}_Release.apk"
-        else
-          RELEASE_APK=$(find app/build/outputs/apk/release/ -name "*.apk" | head -1)
-          if [ -n "$RELEASE_APK" ]; then
-            cp "$RELEASE_APK" "${CLEAN_NAME}_Release.apk"
-            echo "Release APK created: ${CLEAN_NAME}_Release.apk"
-          fi
-        fi
-        
-        # Create comprehensive info file
-        cat > build-info.txt << EOF
-        NY BOTS Advanced WebView App Builder
-        ===================================
-        
-        🚀 BUILD INFORMATION
-        App Name: ${{ github.event.inputs.app_name }}
-        Package: ${{ github.event.inputs.package_name }}
-        Content URL: ${{ github.event.inputs.app_url }}
-        Build Date: $(date)
-        Build Number: ${{ github.run_number }}
-        
-        📱 TECHNICAL SPECIFICATIONS
-        Target SDK: 34 (Android 14)
-        Minimum SDK: 24 (Android 7.0)
-        Compile SDK: 34
-        Gradle Version: 8.0
-        Kotlin Version: 1.9.10
-        
-        ✨ PREMIUM FEATURES INCLUDED
-        ============================
-        
-        🎨 Visual & UI Features:
-        ✅ Custom NY BOTS animated splash screen
-        ✅ Material Design 3 components
-        ✅ Hardware-accelerated graphics
-        ✅ Adaptive app icons (all Android versions)
-        ✅ Immersive full-screen experience
-        ✅ Premium gradient backgrounds
-        
-        🔧 Advanced WebView Capabilities:
-        ✅ Latest WebView engine with all modern APIs
-        ✅ JavaScript-Native bridge integration
-        ✅ DOM storage and database support
-        ✅ Geolocation services
-        ✅ File upload/download with native picker
-        ✅ Camera and microphone access
-        ✅ Mixed content support
-        ✅ Custom user agent identification
-        
-        🛡️ Security & Authentication:
-        ✅ Biometric authentication (fingerprint/face)
-        ✅ Network security configuration
-        ✅ HTTPS handling
-        ✅ Permission management system
-        
-        📱 Native App Experience:
-        ✅ Pull-to-refresh gesture
-        ✅ Back button navigation
-        ✅ Hardware back button support
-        ✅ App lifecycle management
-        ✅ Memory optimization
-        ✅ Battery optimization compliance
-        ✅ Orientation change handling
-        
-        🚀 Performance Optimizations:
-        ✅ Code obfuscation (Release build)
-        ✅ Resource shrinking
-        ✅ R8 full mode optimization
-        ✅ Gradle build caching
-        ✅ Parallel execution
-        ✅ Large heap support
-        
-        🎯 What Makes This Special:
-        ===========================
-        This isn't just a web wrapper - it's a sophisticated native Android app that:
-        • Provides seamless web-to-native integration
-        • Includes enterprise-grade security features  
-        • Offers full device capability access
-        • Delivers premium user experience with custom animations
-        • Maintains perfect performance optimization
-        • Indistinguishable from native apps
-        
-        📦 APK FILES GENERATED:
-        =====================
-        • ${CLEAN_NAME}_Debug.apk - Development/Testing version
-        • ${CLEAN_NAME}_Release.apk - Production-ready, optimized & signed
-        
-        🔧 INSTALLATION INSTRUCTIONS:
-        ============================
-        1. Download the desired APK file
-        2. Enable "Install from Unknown Sources" on your Android device
-        3. Install the APK
-        4. Grant necessary permissions when prompted
-        5. Enjoy your premium NY BOTS app experience!
-        
-        📋 CHANGELOG & FEATURES LOG:
-        ===========================
-        v1.0.0 - Initial Release
-        • Full-featured WebView implementation
-        • Custom splash screen with animations
-        • Biometric authentication support
-        • Advanced permission handling
-        • Premium UI/UX design
-        • Production-ready optimization
-        
-        ⭐ This app represents the cutting edge of WebView technology wrapped in a premium native Android experience!
-        EOF
-        
-        # Create a simple README
-        cat > README.md << 'EOF'
-        # NY BOTS Advanced WebView App
-        
-        🚀 **Premium Android WebView Application**
-        
-        ## Features
-        - Advanced WebView with full native integration
-        - Biometric authentication
-        - Custom splash screen animations  
-        - Camera & media access
-        - Geolocation services
-        - File management
-        - Hardware acceleration
-        - Pull-to-refresh
-        - Native app experience
-        
-        ## Installation
-        1. Download the APK file
-        2. Enable "Unknown Sources" in Android settings
-        3. Install and enjoy!
-        
-        ## Technical Details
-        - **Target SDK:** 34 (Android 14)
-        - **Min SDK:** 24 (Android 7.0)  
-        - **Built with:** Kotlin + Modern Android APIs
-        - **Optimized:** R8 + ProGuard
-        
-        ---
-        *Built with NY BOTS Advanced App Builder*
-        EOF
-        
-    - name: List Generated Files
-      run: |
-        cd android-app
-        echo "📁 Generated files:"
-        ls -la *.apk *.txt *.md 2>/dev/null || echo "Checking build outputs..."
-        echo ""
-        echo "📂 Build outputs:"
-        find app/build/outputs -name "*.apk" 2>/dev/null || echo "No APK files found in outputs"
-        
+        ./gradlew clean
+        ./gradlew assembleDebug
+        ./gradlew assembleRelease
+
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
-      if: always()
       with:
-        name: debug-apk-and-info
-        path: |
-          android-app/*_Debug.apk
-          android-app/build-info.txt
-          android-app/README.md
-        retention-days: 30
-        
-    - name: Upload Release APK  
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: release-apk-and-info
-        path: |
-          android-app/*_Release.apk
-          android-app/build-info.txt
-          android-app/README.md
-        retention-days: 90
-        
-    - name: Upload All Build Artifacts
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: complete-build-outputs
-        path: |
-          android-app/app/build/outputs/
-          android-app/*.apk
-          android-app/*.txt
-          android-app/*.md
+        name: debug-apk
+        path: app/build/outputs/apk/debug/app-debug.apk
         retention-days: 7
-        
-    - name: Create Build Summary
-      if: always()
+
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-apk
+        path: app/build/outputs/apk/release/app-release-unsigned.apk
+        retention-days: 30
+
+    - name: Build Summary
       run: |
-        cd android-app
-        echo "## 📱 NY BOTS Advanced WebView App - Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🎯 Build Configuration" >> $GITHUB_STEP_SUMMARY
-        echo "- **App Name:** ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Package:** ${{ github.event.inputs.package_name }}" >> $GITHUB_STEP_SUMMARY  
-        echo "- **Content URL:** ${{ github.event.inputs.app_url }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Build:** #${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Date:** $(date)" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🚀 Generated Files" >> $GITHUB_STEP_SUMMARY
-        if ls *.apk 1> /dev/null 2>&1; then
-          echo "✅ **APK Files Generated:**" >> $GITHUB_STEP_SUMMARY
-          for apk in *.apk; do
-            if [ -f "$apk" ]; then
-              SIZE=$(du -h "$apk" | cut -f1)
-              echo "- 📱 $apk ($SIZE)" >> $GITHUB_STEP_SUMMARY
-            fi
-          done
-        else
-          echo "❌ No APK files found in root directory" >> $GITHUB_STEP_SUMMARY
-          echo "🔍 Checking build outputs..." >> $GITHUB_STEP_SUMMARY
-          find app/build/outputs -name "*.apk" | while read apk; do
-            SIZE=$(du -h "$apk" | cut -f1)  
-            echo "- 📱 $(basename "$apk") ($SIZE)" >> $GITHUB_STEP_SUMMARY
-          done
-        fi
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### ⬇️ Downloads Available" >> $GITHUB_STEP_SUMMARY
-        echo "Check the **Actions** artifacts section above to download:" >> $GITHUB_STEP_SUMMARY
-        echo "- 🔧 **debug-apk-and-info** - For testing and development" >> $GITHUB_STEP_SUMMARY
-        echo "- 🚀 **release-apk-and-info** - Production-ready, optimized build" >> $GITHUB_STEP_SUMMARY
-        echo "- 📦 **complete-build-outputs** - All build artifacts and logs" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### ✨ App Features Included" >> $GITHUB_STEP_SUMMARY
-        echo "🎨 Custom splash screen • 🔒 Biometric auth • 📸 Camera access • 📍 GPS • 📁 File management • ⚡ Hardware acceleration • 🔄 Pull-to-refresh • 🌐 Advanced WebView" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "---" >> $GITHUB_STEP_SUMMARY
-        echo "*🤖 Built with NY BOTS Advanced App Builder - Transform any website into a premium native Android app!*" >> $GITHUB_STEP_SUMMARY
+        echo "✅ NY BOTS Android App Built Successfully!"
+        echo "📱 Features:"
+        echo "  - Premium splash screen with animation"
+        echo "  - Native-feeling WebView (no one can tell it's web)"
+        echo "  - Pull-to-refresh"
+        echo "  - Offline support"
+        echo "  - Haptic feedback"
+        echo "  - Custom user agent"
+        echo "  - External link blocking"
+        echo "🔧 Configuration:"
+        echo "  - Change URL in AppConfig.kt TARGET_URL"
+        echo "  - Change app name in AppConfig.kt APP_NAME"
+        echo "  - Customize colors and branding"
+        echo "📦 APK files uploaded as artifacts!"
